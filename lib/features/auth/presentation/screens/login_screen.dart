@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -105,175 +106,215 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     });
 
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: _isTeacherMode
-                ? [
-                    AppTheme.peach.withOpacity(0.3),
-                    AppTheme.yellow.withOpacity(0.3),
-                  ] // Color distinto para maestro
-                : [
-                    AppTheme.lilac.withOpacity(0.3),
-                    AppTheme.blue.withOpacity(0.3),
-                  ],
-          ),
-        ),
-        child: Center(
+    return AppTheme.buildWebBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            padding: const EdgeInsets.symmetric(horizontal: 30.0),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Card(
-                  elevation: 8,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    side: const BorderSide(color: AppTheme.lineLight, width: 1),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(32.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _isTeacherMode
-                              ? (_isLogin
-                                    ? 'Portal Maestro'
-                                    : 'Registro Maestro')
-                              : (_isLogin
-                                    ? '¡Hola de nuevo!'
-                                    : 'Crear mi cuenta'),
-                          style: GoogleFonts.fredoka(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.ink2Light,
-                          ),
+                const SizedBox(height: 60),
+                Center(
+                      child: Image.asset(
+                        'assets/images/kiva logo.png',
+                        height: 120,
+                        fit: BoxFit.contain,
+                      ),
+                    )
+                    .animate()
+                    .fadeIn(duration: 600.ms)
+                    .scale(duration: 600.ms, curve: Curves.easeOutBack),
+                const SizedBox(height: 40),
+                Center(
+                      child: Text(
+                        '¡Bienvenidos!',
+                        style: GoogleFonts.fredoka(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.kivaBlue,
                         ),
-                        const SizedBox(height: 24),
-
-                        // === FORMULARIO MAESTRO ===
-                        if (_isTeacherMode) ...[
-                          if (!_isLogin) ...[
+                      ),
+                    )
+                    .animate()
+                    .fadeIn(delay: 300.ms, duration: 500.ms)
+                    .slideY(begin: 0.2, end: 0),
+                const SizedBox(height: 10),
+                Center(
+                      child: Text(
+                        _isTeacherMode
+                            ? (_isLogin ? 'Portal maestro' : 'Registro maestro')
+                            : 'Hola de nuevo...',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.nunito(
+                          fontSize: 18,
+                          color: AppTheme.kivaPurple,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    )
+                    .animate()
+                    .fadeIn(delay: 500.ms, duration: 500.ms)
+                    .slideY(begin: 0.2, end: 0),
+                const SizedBox(height: 50),
+                Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.92),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppTheme.lineLight),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 18,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          if (_isTeacherMode) ...[
+                            if (!_isLogin) ...[
+                              TextField(
+                                controller: _nameController,
+                                decoration: _inputDeco(
+                                  'Tu Nombre y Apellido',
+                                  Icons.person,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
                             TextField(
-                              controller: _nameController,
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
                               decoration: _inputDeco(
-                                'Tu Nombre y Apellido',
-                                Icons.person,
+                                'Correo Electrónico',
+                                Icons.email,
                               ),
                             ),
                             const SizedBox(height: 16),
+                            TextField(
+                              controller: _passwordController,
+                              obscureText: true,
+                              decoration: _inputDeco('Contraseña', Icons.lock),
+                            ),
+                          ] else ...[
+                            TextField(
+                              controller: _aliasController,
+                              decoration: _inputDeco(
+                                'Tu Alias (ej. Juan)',
+                                Icons.face,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            TextField(
+                              controller: _pinController,
+                              keyboardType: TextInputType.number,
+                              obscureText: true,
+                              maxLength: 4,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              decoration: _inputDeco(
+                                'PIN Secreto (4 números)',
+                                Icons.dialpad,
+                              ).copyWith(counterText: ''),
+                            ),
                           ],
-                          TextField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: _inputDeco(
-                              'Correo Electrónico',
-                              Icons.email,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _passwordController,
-                            obscureText: true,
-                            decoration: _inputDeco('Contraseña', Icons.lock),
-                          ),
-                        ]
-                        // === FORMULARIO ALUMNO ===
-                        else ...[
-                          TextField(
-                            controller: _aliasController,
-                            decoration: _inputDeco(
-                              'Tu Alias (ej. Juan)',
-                              Icons.face,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _pinController,
-                            keyboardType: TextInputType.number,
-                            obscureText: true,
-                            maxLength: 4,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                            decoration: _inputDeco(
-                              'PIN Secreto (4 números)',
-                              Icons.dialpad,
-                            ).copyWith(counterText: ''),
-                          ),
                         ],
-
-                        const SizedBox(height: 24),
-
-                        // BOTÓN PRINCIPAL
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _isTeacherMode
-                                  ? AppTheme.yellow
-                                  : AppTheme.pink,
-                            ),
-                            onPressed: authState.isLoading ? null : _submit,
-                            child: authState.isLoading
-                                ? const CircularProgressIndicator()
-                                : Text(
-                                    _isLogin ? 'Entrar' : 'Registrarme',
-                                    style: GoogleFonts.fredoka(fontSize: 18),
-                                  ),
-                          ),
+                      ),
+                    )
+                    .animate()
+                    .fadeIn(delay: 700.ms, duration: 500.ms)
+                    .slideY(begin: 0.12, end: 0),
+                const SizedBox(height: 40),
+                ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.kivaPurple,
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
                         ),
-                        const SizedBox(height: 16),
-
-                        // ALTERNAR ENTRE LOGIN / REGISTRO
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _isLogin = !_isLogin;
-                            });
-                          },
-                          child: Text(
-                            _isLogin
+                        elevation: 5,
+                      ),
+                      onPressed: authState.isLoading ? null : _submit,
+                      child: authState.isLoading
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              _isTeacherMode
+                                  ? (_isLogin
+                                        ? 'Entrar al portal maestro'
+                                        : 'Crear cuenta de maestro')
+                                  : (_isLogin ? 'Entrar' : 'Crear mi cuenta'),
+                              style: GoogleFonts.fredoka(
+                                fontSize: 20,
+                                color: Colors.white,
+                              ),
+                            ),
+                    )
+                    .animate()
+                    .fadeIn(delay: 900.ms, duration: 500.ms)
+                    .scale(
+                      delay: 900.ms,
+                      duration: 500.ms,
+                      curve: Curves.easeOutBack,
+                    ),
+                const SizedBox(height: 16),
+                Center(
+                  child: TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _isLogin = !_isLogin;
+                      });
+                    },
+                    child: Text(
+                      _isTeacherMode
+                          ? (_isLogin
+                                ? 'Registro maestro'
+                                : 'Ya tengo cuenta de maestro')
+                          : (_isLogin
                                 ? '¿No tienes cuenta? Regístrate aquí'
-                                : '¿Ya tienes cuenta? Entra aquí',
-                            style: GoogleFonts.nunito(
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.ringLight,
-                            ),
-                          ),
-                        ),
-                      ],
+                                : '¿Ya tienes cuenta? Entra aquí'),
+                      style: GoogleFonts.nunito(
+                        color: AppTheme.kivaPurple,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
-
-                // BOTÓN PARA CAMBIAR ENTRE ALUMNO Y MAESTRO
-                TextButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _isTeacherMode = !_isTeacherMode;
-                      _isLogin = true; // Reseteamos a Login al cambiar de modo
-                    });
-                  },
-                  icon: Icon(
-                    _isTeacherMode ? Icons.child_care : Icons.school,
-                    color: AppTheme.inkLight,
-                  ),
-                  label: Text(
-                    _isTeacherMode ? 'Soy un alumno' : 'Soy maestro',
-                    style: GoogleFonts.nunito(
-                      fontWeight: FontWeight.bold,
+                ).animate().fadeIn(delay: 1200.ms, duration: 500.ms),
+                const SizedBox(height: 8),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _isTeacherMode = !_isTeacherMode;
+                        _isLogin = true;
+                      });
+                    },
+                    icon: Icon(
+                      _isTeacherMode ? Icons.child_care : Icons.school,
                       color: AppTheme.inkLight,
                     ),
+                    label: Text(
+                      _isTeacherMode ? 'Soy un alumno' : 'Soy maestro',
+                      style: GoogleFonts.nunito(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.inkLight,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
-                ),
+                ).animate().fadeIn(delay: 1300.ms, duration: 400.ms),
+                const SizedBox(height: 40),
               ],
             ),
           ),

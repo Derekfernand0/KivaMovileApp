@@ -216,7 +216,6 @@ class DoorsGameScreen extends ConsumerWidget {
   ) {
     final notifier = ref.read(doorsGameProvider.notifier);
     final isSelected = state.selectedDoorIndex == doorIndex;
-    final isAnimating = state.isAnimating;
 
     return GestureDetector(
       onTap: () => notifier.selectDoor(doorIndex),

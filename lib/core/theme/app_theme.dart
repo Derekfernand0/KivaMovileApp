@@ -24,6 +24,72 @@ class AppTheme {
 
   static const Color ringLight = Color(0xFFE2E8F0); // Bordes y líneas suaves
 
+  // Compatibilidad con nombres usados en pantallas existentes.
+  static const Color blue = kivaBlue;
+  static const Color cardLight = Colors.white;
+  static const Color lineLight = ringLight;
+  static const Color ink2Light = inkLight;
+
+  static ThemeData get lightTheme => ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.light,
+    scaffoldBackgroundColor: paperLight,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: kivaPurple,
+      primary: kivaPurple,
+      secondary: kivaBlue,
+      surface: cardLight,
+      brightness: Brightness.light,
+    ),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: paperLight,
+      foregroundColor: inkLight,
+      elevation: 0,
+      centerTitle: false,
+    ),
+    cardTheme: const CardThemeData(
+      color: cardLight,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+      ),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: kivaPurple,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: lineLight),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: lineLight),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: kivaPurple, width: 1.6),
+      ),
+    ),
+  );
+
+  static ThemeData get darkTheme => ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: kivaPurple,
+      primary: lilac,
+      secondary: kivaBlue,
+      brightness: Brightness.dark,
+    ),
+  );
+
   // --- WIDGET AUXILIAR: FONDO DE CÍRCULOS PASTELES (CSS Style) ---
   // He creado este widget para que puedas usar el fondo web en cualquier pantalla.
   // Es súper optimizado porque no usa imágenes, usa formas de Flutter.
