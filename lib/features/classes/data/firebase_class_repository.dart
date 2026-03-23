@@ -61,8 +61,14 @@ class FirebaseClassRepository {
       throw Exception('Ya estás en esta clase.');
     }
 
+    // 1. Agregamos al alumno a la lista de la clase
     currentMembers.add(userId);
     await classDoc.reference.update({'memberIds': currentMembers});
+
+    // 👇 2. LA MAGIA AQUÍ: Actualizamos el perfil del usuario para que sepa en qué clase está
+    await _firestore.collection('users').doc(userId).set({
+      'classId': classDoc.id,
+    }, SetOptions(merge: true));
   }
 
   // 3. Obtener las clases a las que pertenece el usuario (en tiempo real)

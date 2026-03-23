@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -7,6 +8,7 @@ import '../../../games/presentation/screens/minigames_hub_screen.dart';
 // 👇 Importamos el provider de los minijuegos para leer los puntos
 import '../../../games/presentation/providers/minigames_provider.dart';
 import '../providers/class_provider.dart';
+import 'class_members_screen.dart';
 import '../../../tasks/presentation/providers/task_provider.dart';
 import '../../../tasks/presentation/screens/create_task_screen.dart';
 import '../../../tasks/presentation/screens/task_detail_screen.dart';
@@ -80,312 +82,380 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
           (c) => c.id == classId,
           orElse: () => throw Exception('Clase no encontrada'),
         );
-        final isMaestro = user.role == 'maestro';
+        final isMaestro =
+            user.role == 'maestro' ||
+            user.role == 'admin' ||
+            currentClass.hostId == user.uid;
 
-        return Scaffold(
-          backgroundColor: AppTheme.paperLight,
-          appBar: AppBar(
-            backgroundColor: AppTheme.paperLight,
-            title: Text(
-              currentClass.name,
-              style: GoogleFonts.fredoka(
-                fontWeight: FontWeight.bold,
-                color: AppTheme.inkLight,
-              ),
-            ),
-            iconTheme: const IconThemeData(color: AppTheme.inkLight),
-          ),
-          body: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppTheme.lilac.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppTheme.ringLight.withOpacity(0.3),
-                    ),
+        return AppTheme.buildWebBackground(
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            appBar: AppBar(
+              backgroundColor: Colors.white.withOpacity(0.9),
+              elevation: 4,
+              iconTheme: const IconThemeData(color: AppTheme.inkLight),
+              titleSpacing: 0,
+              title: Row(
+                children: [
+                  const SizedBox(width: 10),
+                  const Icon(
+                    Icons.shield_rounded,
+                    color: AppTheme.lilac,
+                    size: 28,
+                  ).animate().scale(
+                    duration: 500.ms,
+                    curve: Curves.easeOutBack,
                   ),
-                  child: Column(
-                    children: [
-                      Icon(Icons.school, size: 48, color: AppTheme.ringLight),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Bienvenido a ${currentClass.name}',
-                        style: GoogleFonts.fredoka(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.inkLight,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 30),
-                Text(
-                  'Muro de la Clase',
-                  style: GoogleFonts.fredoka(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.inkLight,
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                Expanded(
-                  child: tasks.isEmpty
-                      ? Center(
-                          child: Text(
-                            'El muro está vacío por ahora.',
-                            style: GoogleFonts.nunito(
-                              color: Colors.grey,
-                              fontSize: 16,
+                  const SizedBox(width: 8),
+                  Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'KIVA',
+                            style: GoogleFonts.fredoka(
+                              color: AppTheme.kivaBlue,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        )
-                      : ListView.builder(
-                          itemCount: tasks.length,
-                          itemBuilder: (context, index) {
-                            final task = tasks[index];
-                            bool isOriginalGame =
-                                (task.targetGameId == 'puertas' ||
-                                task.targetGameId == 'torre' ||
-                                task.targetGameId == 'shawarma');
-                            bool isExpired = DateTime.now().isAfter(
-                              task.dueDate,
-                            );
-
-                            // 👇 LOGICA DE COMPLETADO
-                            int currentScore = _getCurrentScoreForGame(
-                              task.targetGameId,
-                              miniGamesState,
-                            );
-                            bool isCompleted = currentScore >= task.targetScore;
-
-                            String dueDateText =
-                                '${task.dueDate.day}/${task.dueDate.month}/${task.dueDate.year}';
-
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 15),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(15),
-                              ),
-                              elevation: isCompleted
-                                  ? 0
-                                  : 2, // Si está completada, se ve plana
-                              // 👇 Si está completada, fondo gris clarito
-                              color: isCompleted
-                                  ? Colors.grey.shade100
-                                  : Colors.white,
-                              child: ListTile(
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => TaskDetailScreen(
-                                        task: task,
-                                        isMaestro: isMaestro,
-                                        isOriginalGame: isOriginalGame,
-                                        isExpired: isExpired,
-                                        isCompleted: isCompleted,
-                                        currentClass:
-                                            currentClass, // 👈 AGREGAR ESTA LÍNEA
-                                      ),
-                                    ),
-                                  );
-                                },
-                                contentPadding: const EdgeInsets.all(15),
-                                leading: CircleAvatar(
-                                  // Cambia el ícono si está completada ✅
-                                  backgroundColor: isCompleted
-                                      ? const Color(0xFF2ed573)
-                                      : (isExpired
-                                            ? Colors.grey
-                                            : AppTheme.peach),
-                                  child: Icon(
-                                    isCompleted
-                                        ? Icons.check
-                                        : (isExpired
-                                              ? Icons.timer_off
-                                              : Icons.star),
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                title: Text(
-                                  task.title,
-                                  style: GoogleFonts.fredoka(
-                                    fontSize: 18,
-                                    color: isCompleted || isExpired
-                                        ? Colors.grey
-                                        : AppTheme.inkLight,
-                                    decoration: isCompleted
-                                        ? TextDecoration.lineThrough
-                                        : null,
-                                  ),
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const SizedBox(height: 5),
-                                    Text(
-                                      task.description,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.nunito(
-                                        color: Colors.grey.shade700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Wrap(
-                                      spacing: 10,
-                                      runSpacing: 5,
-                                      crossAxisAlignment:
-                                          WrapCrossAlignment.center,
-                                      children: [
-                                        // Puntos (Muestra progreso real ej: 15/15)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: isCompleted
-                                                ? Colors.green.shade100
-                                                : (isExpired
-                                                      ? Colors.grey.shade300
-                                                      : AppTheme.yellow),
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            'Progreso: $currentScore/${task.targetScore}',
-                                            style: GoogleFonts.nunito(
-                                              fontWeight: FontWeight.bold,
-                                              color: isCompleted
-                                                  ? Colors.green.shade800
-                                                  : AppTheme.inkLight,
-                                            ),
-                                          ),
-                                        ),
-                                        if (!isCompleted)
-                                          Text(
-                                            '🕒 Límite: $dueDateText',
-                                            style: GoogleFonts.nunito(
-                                              fontSize: 12,
-                                              color: isExpired
-                                                  ? Colors.red
-                                                  : Colors.grey.shade600,
-                                              fontWeight: isExpired
-                                                  ? FontWeight.bold
-                                                  : FontWeight.normal,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                trailing: isMaestro
-                                    ? const Icon(
-                                        Icons.chevron_right,
-                                        color: Colors.grey,
-                                      )
-                                    : isExpired && !isCompleted
-                                    ? Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey.shade200,
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '🔒',
-                                          style: GoogleFonts.fredoka(
-                                            color: Colors.grey.shade600,
-                                          ),
-                                        ),
-                                      )
-                                    // 👇 BOTÓN REINTENTAR EN GRIS SI ESTÁ COMPLETADA
-                                    : ElevatedButton(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: isCompleted
-                                              ? Colors.grey.shade300
-                                              : const Color(0xFF2ed573),
-                                          foregroundColor: isCompleted
-                                              ? Colors.grey.shade700
-                                              : Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                          elevation: isCompleted ? 0 : 2,
-                                        ),
-                                        onPressed: () {
-                                          if (isOriginalGame) {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'Abriendo el juego original...',
-                                                ),
-                                              ),
-                                            );
-                                          } else {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    const MiniGamesHubScreen(),
-                                              ),
-                                            );
-                                          }
-                                        },
-                                        child: Text(
-                                          isCompleted ? 'Reintentar' : 'Jugar',
-                                          style: GoogleFonts.fredoka(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                              ),
-                            );
-                          },
+                          Text(
+                            "- Kid's Integrity, voz y Apoyo",
+                            style: GoogleFonts.nunito(
+                              color: AppTheme.kivaPurple,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      )
+                      .animate()
+                      .fadeIn(delay: 200.ms, duration: 400.ms)
+                      .slideX(begin: 0.1, end: 0),
+                ],
+              ),
+              actions: [
+                if (isMaestro)
+                  IconButton(
+                    icon: const Icon(Icons.people, color: AppTheme.inkLight),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ClassMembersScreen(
+                            classId: currentClass.id,
+                            className: currentClass.name,
+                            hostId: currentClass.hostId,
+                          ),
                         ),
+                      );
+                    },
+                  ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.info_outline,
+                    color: AppTheme.inkLight,
+                  ),
+                  onPressed: () {},
                 ),
               ],
             ),
-          ),
-          floatingActionButton: isMaestro
-              ? FloatingActionButton.extended(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => CreateTaskScreen(
-                          classId: widget
-                              .classId, // 👈 ¡AQUÍ ESTÁ LA SOLUCIÓN! Le pasamos el ID real
-                        ),
+            body: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppTheme.lilac.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppTheme.ringLight.withOpacity(0.3),
                       ),
-                    );
-                  },
-                  backgroundColor: AppTheme.pink,
-                  icon: const Icon(Icons.add, color: AppTheme.inkLight),
-                  label: Text(
-                    'Nueva Tarea',
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(Icons.school, size: 48, color: AppTheme.ringLight),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Bienvenido a ${currentClass.name}',
+                          style: GoogleFonts.fredoka(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.inkLight,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  Text(
+                    'Muro de la Clase',
                     style: GoogleFonts.fredoka(
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                       color: AppTheme.inkLight,
                     ),
                   ),
-                )
-              : null,
+                  const SizedBox(height: 16),
+
+                  Expanded(
+                    child: tasks.isEmpty
+                        ? Center(
+                            child: Text(
+                              'El muro está vacío por ahora.',
+                              style: GoogleFonts.nunito(
+                                color: Colors.grey,
+                                fontSize: 16,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: tasks.length,
+                            itemBuilder: (context, index) {
+                              final task = tasks[index];
+                              bool isOriginalGame =
+                                  (task.targetGameId == 'puertas' ||
+                                  task.targetGameId == 'torre' ||
+                                  task.targetGameId == 'shawarma');
+                              bool isExpired = DateTime.now().isAfter(
+                                task.dueDate,
+                              );
+
+                              // 👇 LOGICA DE COMPLETADO
+                              int currentScore = _getCurrentScoreForGame(
+                                task.targetGameId,
+                                miniGamesState,
+                              );
+                              bool isCompleted =
+                                  currentScore >= task.targetScore;
+
+                              String dueDateText =
+                                  '${task.dueDate.day}/${task.dueDate.month}/${task.dueDate.year}';
+
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 15),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                                elevation: isCompleted
+                                    ? 0
+                                    : 2, // Si está completada, se ve plana
+                                // 👇 Si está completada, fondo gris clarito
+                                color: isCompleted
+                                    ? Colors.grey.shade100
+                                    : Colors.white,
+                                child: ListTile(
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (context) => TaskDetailScreen(
+                                          task: task,
+                                          isMaestro: isMaestro,
+                                          isOriginalGame: isOriginalGame,
+                                          isExpired: isExpired,
+                                          isCompleted: isCompleted,
+                                          currentClass:
+                                              currentClass, // 👈 AGREGAR ESTA LÍNEA
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  contentPadding: const EdgeInsets.all(15),
+                                  leading: CircleAvatar(
+                                    // Cambia el ícono si está completada ✅
+                                    backgroundColor: isCompleted
+                                        ? const Color(0xFF2ed573)
+                                        : (isExpired
+                                              ? Colors.grey
+                                              : AppTheme.peach),
+                                    child: Icon(
+                                      isCompleted
+                                          ? Icons.check
+                                          : (isExpired
+                                                ? Icons.timer_off
+                                                : Icons.star),
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  title: Text(
+                                    task.title,
+                                    style: GoogleFonts.fredoka(
+                                      fontSize: 18,
+                                      color: isCompleted || isExpired
+                                          ? Colors.grey
+                                          : AppTheme.inkLight,
+                                      decoration: isCompleted
+                                          ? TextDecoration.lineThrough
+                                          : null,
+                                    ),
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const SizedBox(height: 5),
+                                      Text(
+                                        task.description,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.nunito(
+                                          color: Colors.grey.shade700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Wrap(
+                                        spacing: 10,
+                                        runSpacing: 5,
+                                        crossAxisAlignment:
+                                            WrapCrossAlignment.center,
+                                        children: [
+                                          // Puntos (Muestra progreso real ej: 15/15)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isCompleted
+                                                  ? Colors.green.shade100
+                                                  : (isExpired
+                                                        ? Colors.grey.shade300
+                                                        : AppTheme.yellow),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              'Progreso: $currentScore/${task.targetScore}',
+                                              style: GoogleFonts.nunito(
+                                                fontWeight: FontWeight.bold,
+                                                color: isCompleted
+                                                    ? Colors.green.shade800
+                                                    : AppTheme.inkLight,
+                                              ),
+                                            ),
+                                          ),
+                                          if (!isCompleted)
+                                            Text(
+                                              '🕒 Límite: $dueDateText',
+                                              style: GoogleFonts.nunito(
+                                                fontSize: 12,
+                                                color: isExpired
+                                                    ? Colors.red
+                                                    : Colors.grey.shade600,
+                                                fontWeight: isExpired
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                  trailing: isMaestro
+                                      ? const Icon(
+                                          Icons.chevron_right,
+                                          color: Colors.grey,
+                                        )
+                                      : isExpired && !isCompleted
+                                      ? Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.shade200,
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '🔒',
+                                            style: GoogleFonts.fredoka(
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                        )
+                                      // 👇 BOTÓN REINTENTAR EN GRIS SI ESTÁ COMPLETADA
+                                      : ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: isCompleted
+                                                ? Colors.grey.shade300
+                                                : const Color(0xFF2ed573),
+                                            foregroundColor: isCompleted
+                                                ? Colors.grey.shade700
+                                                : Colors.white,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            elevation: isCompleted ? 0 : 2,
+                                          ),
+                                          onPressed: () {
+                                            if (isOriginalGame) {
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Abriendo el juego original...',
+                                                  ),
+                                                ),
+                                              );
+                                            } else {
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      const MiniGamesHubScreen(),
+                                                ),
+                                              );
+                                            }
+                                          },
+                                          child: Text(
+                                            isCompleted
+                                                ? 'Reintentar'
+                                                : 'Jugar',
+                                            style: GoogleFonts.fredoka(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            floatingActionButton: isMaestro
+                ? FloatingActionButton.extended(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              CreateTaskScreen(classId: widget.classId),
+                        ),
+                      );
+                    },
+                    backgroundColor: AppTheme.kivaPurple,
+                    icon: const Icon(Icons.add_task, color: Colors.white),
+                    label: Text(
+                      'Nueva Tarea',
+                      style: GoogleFonts.fredoka(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ).animate().scale(
+                    delay: 800.ms,
+                    duration: 500.ms,
+                    curve: Curves.easeOutBack,
+                  )
+                : null,
+          ),
         );
       },
     );

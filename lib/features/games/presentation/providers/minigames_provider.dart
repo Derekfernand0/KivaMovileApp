@@ -93,13 +93,35 @@ class MiniGamesNotifier extends StateNotifier<MiniGamesState> {
   }
 
   // 👇 3. MÉTODO NUEVO: Sube los puntos a Firebase cada que el niño gana
-  Future<void> _saveScoreToFirebase(String gameField, int newScore) async {
+  // 👇 MÉTODO ACTUALIZADO: Guarda la puntuación máxima y el historial real
+  Future<void> _saveScoreToFirebase(String baseGameId, int newScore) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      // Usamos merge: true para no borrar los demás datos del usuario (como su nombre o rol)
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        gameField: newScore,
-      }, SetOptions(merge: true));
+      final docRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid);
+
+      // Usamos una Transacción para leer los datos actuales y actualizarlos de forma segura
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final snapshot = await transaction.get(docRef);
+        if (!snapshot.exists) return;
+
+        final data = snapshot.data()!;
+
+        // 1. Actualizamos la puntuación máxima (si la nueva es mayor)
+        int currentMax = data['${baseGameId}Score'] ?? 0;
+        int newMax = newScore > currentMax ? newScore : currentMax;
+
+        // 2. Agregamos el nuevo intento al historial
+        List<dynamic> history = data['${baseGameId}History'] ?? [];
+        history.add(newScore);
+
+        // 3. Guardamos ambos en Firebase
+        transaction.update(docRef, {
+          '${baseGameId}Score': newMax,
+          '${baseGameId}History': history,
+        });
+      });
     }
   }
 
