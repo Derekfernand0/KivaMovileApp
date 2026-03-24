@@ -6,13 +6,12 @@ import '../providers/task_provider.dart';
 import 'create_task_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// 👇 IMPORTAMOS LAS RUTAS A LOS JUEGOS Y QUIZZES
 import '../../../games/presentation/screens/doors_game_screen.dart';
 import '../../../games/presentation/screens/water_game_screen.dart';
 import '../../../games/presentation/screens/shawarma_game_screen.dart';
 import '../../../games/presentation/screens/minigames_hub_screen.dart';
-import '../../../quizzes/presentation/screens/quiz_game_screen.dart'; // 👈 El nuevo
-import '../../../quizzes/data/premade_quizzes/premade_quizzes_db.dart'; // 👈 Base de datos de quizzes
+import '../../../quizzes/presentation/screens/quiz_game_screen.dart';
+import '../../../quizzes/presentation/providers/quiz_provider.dart'; // 👈 Provider actualizado
 
 class TaskDetailScreen extends ConsumerWidget {
   final GameTask task;
@@ -61,6 +60,89 @@ class TaskDetailScreen extends ConsumerWidget {
     }
   }
 
+  // 👇 NUEVO DIÁLOGO PARA LEER RESPUESTAS ABIERTAS
+  void _showAnswersDialog(
+    BuildContext context,
+    String studentName,
+    Map<dynamic, dynamic> answers,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.comment, color: AppTheme.kivaPurple),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Respuestas de $studentName',
+                  style: GoogleFonts.fredoka(color: AppTheme.inkLight),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: answers.length,
+              separatorBuilder: (_, __) => const Divider(),
+              itemBuilder: (context, index) {
+                String question = answers.keys.elementAt(index).toString();
+                String answer = answers.values.elementAt(index).toString();
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'P: $question',
+                        style: GoogleFonts.nunito(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          answer,
+                          style: GoogleFonts.nunito(
+                            color: AppTheme.inkLight,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Cerrar',
+                style: GoogleFonts.nunito(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final titleStyle = GoogleFonts.fredoka(
@@ -70,13 +152,18 @@ class TaskDetailScreen extends ConsumerWidget {
     String dueDateText =
         '${task.dueDate.day}/${task.dueDate.month}/${task.dueDate.year} a las ${task.dueDate.hour}:${task.dueDate.minute.toString().padLeft(2, '0')}';
 
-    // 👇 NOMBRES DINÁMICOS (Soporta minijuegos y Quizzes infinitos)
+    bool isQuiz =
+        task.targetGameId.startsWith('quiz_') || task.targetGameId.length > 15;
+
+    // Obtenemos todos los quizzes (Prehechos + Customizados) usando .valueOrNull
+    final allQuizzes = ref.watch(availableQuizzesProvider).valueOrNull ?? [];
+
     String gameName = 'Juego Desconocido';
-    if (task.targetGameId.startsWith('quiz_')) {
-      final quiz = premadeQuizzesDatabase
+    if (isQuiz) {
+      final quiz = allQuizzes
           .where((q) => q.id == task.targetGameId)
           .firstOrNull;
-      gameName = quiz != null ? '📝 ${quiz.title}' : '📝 Cuestionario KIVA';
+      gameName = quiz != null ? '📝 ${quiz.title}' : '📝 Quiz Personalizado';
     } else {
       final Map<String, String> gameNames = {
         'puertas': '🚪 Las Puertas de la Confianza',
@@ -110,16 +197,12 @@ class TaskDetailScreen extends ConsumerWidget {
           if (isMaestro)
             IconButton(
               icon: const Icon(Icons.edit, color: Colors.blueAccent),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => CreateTaskScreen(
-                      taskToEdit: task,
-                      classId: task.classId,
-                    ),
-                  ),
-                );
-              },
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) =>
+                      CreateTaskScreen(taskToEdit: task, classId: task.classId),
+                ),
+              ),
             ),
           if (isMaestro)
             IconButton(
@@ -247,17 +330,14 @@ class TaskDetailScreen extends ConsumerWidget {
                     .where('classId', isEqualTo: task.classId)
                     .snapshots(),
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
+                  if (snapshot.connectionState == ConnectionState.waiting)
                     return const Center(child: CircularProgressIndicator());
-                  }
 
                   final realStudents = snapshot.data?.docs ?? [];
-
-                  if (realStudents.isEmpty) {
+                  if (realStudents.isEmpty)
                     return _buildEmptyBox(
                       'Aún no hay alumnos registrados en tu clase.',
                     );
-                  }
 
                   List<QueryDocumentSnapshot> completedStudents = [];
                   for (var student in realStudents) {
@@ -279,9 +359,11 @@ class TaskDetailScreen extends ConsumerWidget {
                           '¡Excelente! Todos los alumnos han completado esta tarea.',
                         ),
                         _buildStudentsList(
+                          context,
                           realStudents,
                           completedStudents,
                           task.targetScore,
+                          isMaestro,
                         ),
                       ],
                     );
@@ -294,18 +376,22 @@ class TaskDetailScreen extends ConsumerWidget {
                           'Nadie ha terminado esta tarea aún.',
                         ),
                         _buildStudentsList(
+                          context,
                           realStudents,
                           completedStudents,
                           task.targetScore,
+                          isMaestro,
                         ),
                       ],
                     );
                   }
 
                   return _buildStudentsList(
+                    context,
                     realStudents,
                     completedStudents,
                     task.targetScore,
+                    isMaestro,
                   );
                 },
               ),
@@ -325,8 +411,7 @@ class TaskDetailScreen extends ConsumerWidget {
                   elevation: isCompleted ? 0 : 5,
                 ),
                 onPressed: () {
-                  // 👇 AHORA SÍ NAVEGAMOS AL JUEGO CORRESPONDIENTE O AL QUIZ
-                  if (task.targetGameId.startsWith('quiz_')) {
+                  if (isQuiz) {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) =>
@@ -364,7 +449,7 @@ class TaskDetailScreen extends ConsumerWidget {
                   size: 28,
                 ),
                 label: Text(
-                  isCompleted ? 'Reintentar Tarea' : 'Ir a la Actividad',
+                  isCompleted ? 'Reintentar Actividad' : 'Ir a la Actividad',
                   style: GoogleFonts.fredoka(fontSize: 22),
                 ),
               ),
@@ -447,9 +532,11 @@ class TaskDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildStudentsList(
+    BuildContext context,
     List<QueryDocumentSnapshot> allStudents,
     List<QueryDocumentSnapshot> completedStudents,
     int targetScore,
+    bool isMaestro,
   ) {
     return Container(
       decoration: BoxDecoration(
@@ -473,6 +560,11 @@ class TaskDetailScreen extends ConsumerWidget {
               studentData['alias'] ??
               'Alumno Desconocido';
           int currentScore = _getStudentScore(studentData, task.targetGameId);
+
+          // 👇 Revisamos si este alumno tiene respuestas de texto guardadas
+          Map<dynamic, dynamic>? answers =
+              studentData['${task.targetGameId}Answers'];
+          bool hasAnswers = answers != null && answers.isNotEmpty;
 
           return ListTile(
             leading: CircleAvatar(
@@ -498,20 +590,43 @@ class TaskDetailScreen extends ConsumerWidget {
                 fontSize: 13,
               ),
             ),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: done ? Colors.green.shade100 : Colors.orange.shade100,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                done ? 'Completado' : 'Pendiente',
-                style: GoogleFonts.nunito(
-                  color: done ? Colors.green.shade800 : Colors.orange.shade800,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 👇 BOTÓN PARA LEER RESPUESTAS (Solo sale si es maestro y el alumno escribió algo)
+                if (isMaestro && done && hasAnswers)
+                  IconButton(
+                    icon: const Icon(
+                      Icons.remove_red_eye,
+                      color: AppTheme.kivaPurple,
+                    ),
+                    tooltip: 'Ver Respuestas',
+                    onPressed: () =>
+                        _showAnswersDialog(context, studentName, answers),
+                  ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: done
+                        ? Colors.green.shade100
+                        : Colors.orange.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    done ? 'Completado' : 'Pendiente',
+                    style: GoogleFonts.nunito(
+                      color: done
+                          ? Colors.green.shade800
+                          : Colors.orange.shade800,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           );
         },

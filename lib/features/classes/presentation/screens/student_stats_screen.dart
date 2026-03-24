@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // 👈 Agregado para usar ConsumerWidget
 import '../../../../core/theme/app_theme.dart';
-// 👇 Importamos la base de datos de Quizzes
-import '../../../quizzes/data/premade_quizzes/premade_quizzes_db.dart';
+import '../../../quizzes/presentation/providers/quiz_provider.dart'; // 👈 Importamos proveedor
 
-class StudentStatsScreen extends StatelessWidget {
+// 👇 Cambiamos a ConsumerWidget
+class StudentStatsScreen extends ConsumerWidget {
   final String studentId;
   final String studentName;
   final Map<String, dynamic> studentData;
@@ -17,7 +18,6 @@ class StudentStatsScreen extends StatelessWidget {
     required this.studentData,
   });
 
-  // 👇 DICCIONARIO COMPLETO: LOS 10 JUEGOS ORIGINALES
   final Map<String, Map<String, dynamic>> _gamesConfig = const {
     'puertas': {'name': '🚪 Las Puertas', 'color': Colors.redAccent},
     'torre': {'name': '🏗️ La Gran Torre', 'color': Colors.amber},
@@ -40,28 +40,24 @@ class StudentStatsScreen extends StatelessWidget {
     },
   };
 
-  // 👇 FUNCIÓN A PRUEBA DE BALAS PARA LEER NÚMEROS DE FIREBASE
   int _getSafeInt(dynamic value) {
     if (value == null) return 0;
-    if (value is num)
-      return value.toInt(); // Convierte double a int automáticamente
+    if (value is num) return value.toInt();
     if (value is String) return int.tryParse(value) ?? 0;
     return 0;
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     int globalTotalScore = 0;
     int globalGamesPlayed = 0;
     int globalMax = 0;
 
-    // 1. CALCULAR MÉTRICAS GLOBALES REALES DE JUEGOS
     for (var baseKey in _gamesConfig.keys) {
       List<dynamic> history = studentData['${baseKey}History'] ?? [];
-
       if (history.isNotEmpty) {
         for (var score in history) {
-          int s = _getSafeInt(score); // 👈 Lectura segura
+          int s = _getSafeInt(score);
           globalTotalScore += s;
           globalGamesPlayed++;
           if (s > globalMax) globalMax = s;
@@ -79,6 +75,9 @@ class StudentStatsScreen extends StatelessWidget {
     double globalAvg = globalGamesPlayed > 0
         ? globalTotalScore / globalGamesPlayed
         : 0.0;
+
+    // 👇 Leemos todos los quizzes (Prehechos + Los creados por este maestro)
+    final quizzesAsync = ref.watch(availableQuizzesProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.paperLight,
@@ -99,7 +98,6 @@ class StudentStatsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // --- TARJETAS GLOBALES ---
             Row(
               children: [
                 Expanded(
@@ -123,9 +121,6 @@ class StudentStatsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 30),
 
-            // ====================================================
-            // SECCIÓN 1: MINIJUEGOS
-            // ====================================================
             Text(
               '🎮 Rendimiento en Juegos',
               style: GoogleFonts.fredoka(
@@ -157,10 +152,8 @@ class StudentStatsScreen extends StatelessWidget {
                 avgScore = maxScore.toDouble();
               }
 
-              if (maxScore == 0 && history.isEmpty) {
+              if (maxScore == 0 && history.isEmpty)
                 return _buildEmptyCard(gameName, Icons.videogame_asset_off);
-              }
-
               return _buildChartCard(
                 gameName,
                 gameColor,
@@ -174,9 +167,6 @@ class StudentStatsScreen extends StatelessWidget {
 
             const SizedBox(height: 30),
 
-            // ====================================================
-            // SECCIÓN 2: QUIZZES (NUEVA)
-            // ====================================================
             Text(
               '📝 Rendimiento en Quizzes',
               style: GoogleFonts.fredoka(
@@ -186,61 +176,59 @@ class StudentStatsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 15),
 
-            if (premadeQuizzesDatabase.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 20),
-                child: Text(
-                  'No hay quizzes en la base de datos.',
-                  style: GoogleFonts.nunito(color: Colors.grey),
-                ),
-              )
-            else
-              ...premadeQuizzesDatabase.map((quiz) {
-                String baseKey = quiz.id;
-                String quizName = quiz.title;
-                Color quizColor =
-                    AppTheme.kivaPurple; // Color morado para los quizzes
-                int totalPossible = quiz.totalPossibleScore;
+            // 👇 GENERAMOS LAS GRÁFICAS DE TODOS LOS QUIZZES (Incluso los personalizados)
+            quizzesAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, st) => Text('Error al cargar quizzes: $e'),
+              data: (quizzes) {
+                if (quizzes.isEmpty)
+                  return const Text('No hay quizzes disponibles.');
 
-                List<dynamic> history = studentData['${baseKey}History'] ?? [];
-                int maxScore = _getSafeInt(studentData['${baseKey}Score']);
-                double avgScore = 0.0;
+                return Column(
+                  children: quizzes.map((quiz) {
+                    String baseKey = quiz.id;
+                    String quizName = quiz.title;
+                    Color quizColor = AppTheme.kivaPurple;
+                    int totalPossible = quiz.totalPossibleScore;
 
-                if (history.isNotEmpty) {
-                  int sum = history.fold(
-                    0,
-                    (prev, curr) => prev + _getSafeInt(curr),
-                  );
-                  avgScore = sum / history.length;
-                  maxScore = history
-                      .map((e) => _getSafeInt(e))
-                      .reduce((a, b) => a > b ? a : b);
-                } else if (maxScore > 0) {
-                  avgScore = maxScore.toDouble();
-                }
+                    List<dynamic> history =
+                        studentData['${baseKey}History'] ?? [];
+                    int maxScore = _getSafeInt(studentData['${baseKey}Score']);
+                    double avgScore = 0.0;
 
-                if (maxScore == 0 && history.isEmpty) {
-                  return _buildEmptyCard(quizName, Icons.quiz_outlined);
-                }
+                    if (history.isNotEmpty) {
+                      int sum = history.fold(
+                        0,
+                        (prev, curr) => prev + _getSafeInt(curr),
+                      );
+                      avgScore = sum / history.length;
+                      maxScore = history
+                          .map((e) => _getSafeInt(e))
+                          .reduce((a, b) => a > b ? a : b);
+                    } else if (maxScore > 0) {
+                      avgScore = maxScore.toDouble();
+                    }
 
-                // En los quizzes, el techo de la gráfica siempre será el máximo posible de puntos (totalPossible)
-                return _buildChartCard(
-                  quizName,
-                  quizColor,
-                  Icons.quiz,
-                  history.length,
-                  avgScore,
-                  maxScore,
-                  totalPossible,
+                    if (maxScore == 0 && history.isEmpty)
+                      return _buildEmptyCard(quizName, Icons.quiz_outlined);
+                    return _buildChartCard(
+                      quizName,
+                      quizColor,
+                      Icons.quiz,
+                      history.length,
+                      avgScore,
+                      maxScore,
+                      totalPossible,
+                    );
+                  }).toList(),
                 );
-              }),
+              },
+            ),
           ],
         ),
       ),
     );
   }
-
-  // --- WIDGETS AUXILIARES PARA LIMPIEZA DE CÓDIGO ---
 
   Widget _buildGlobalCard(
     String title,
@@ -377,25 +365,22 @@ class StudentStatsScreen extends StatelessWidget {
                   child: BarChart(
                     BarChartData(
                       alignment: BarChartAlignment.spaceAround,
-                      // Ajuste dinámico del techo de la gráfica
                       maxY: graphCeiling < 20 ? 20.0 : graphCeiling.toDouble(),
                       titlesData: FlTitlesData(
                         show: true,
                         bottomTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
-                            getTitlesWidget: (value, meta) {
-                              return Padding(
-                                padding: const EdgeInsets.only(top: 8.0),
-                                child: Text(
-                                  value == 0 ? 'Promedio' : 'Máxima',
-                                  style: GoogleFonts.nunito(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                            getTitlesWidget: (value, meta) => Padding(
+                              padding: const EdgeInsets.only(top: 8.0),
+                              child: Text(
+                                value == 0 ? 'Promedio' : 'Máxima',
+                                style: GoogleFonts.nunito(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                              );
-                            },
+                              ),
+                            ),
                           ),
                         ),
                         leftTitles: const AxisTitles(

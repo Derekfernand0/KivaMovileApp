@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../providers/task_provider.dart';
-// 👇 Importamos la base de datos de Quizzes que creamos en el paso anterior
-import '../../../quizzes/data/premade_quizzes/premade_quizzes_db.dart';
+
+// 👇 Importamos el proveedor de Quizzes y la pantalla de crear Quiz
+import '../../../quizzes/presentation/providers/quiz_provider.dart';
+import '../../../quizzes/presentation/screens/create_custom_quiz_screen.dart';
 
 class CreateTaskScreen extends ConsumerStatefulWidget {
   final String classId;
-  final GameTask? taskToEdit;
+  final GameTask? taskToEdit; // Si recibe una tarea, entra en modo Edición
 
   const CreateTaskScreen({super.key, this.classId = '', this.taskToEdit});
 
@@ -21,7 +23,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
 
-  // 👇 Control del nuevo interruptor (Minijuego vs Quiz)
+  // Control del interruptor (Minijuego vs Quiz)
   String _taskType = 'game'; // 'game' o 'quiz'
 
   String _selectedGameId = 'rompe_silencio';
@@ -53,19 +55,15 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   void initState() {
     super.initState();
 
-    // Seleccionamos el primer quiz por defecto si la base de datos no está vacía
-    if (premadeQuizzesDatabase.isNotEmpty) {
-      _selectedQuizId = premadeQuizzesDatabase.first.id;
-    }
-
     if (widget.taskToEdit != null) {
       _titleController.text = widget.taskToEdit!.title;
       _descController.text = widget.taskToEdit!.description;
       _targetScore = widget.taskToEdit!.targetScore.toDouble();
       _selectedDate = widget.taskToEdit!.dueDate;
 
-      // 👇 Detectamos si la tarea que estamos editando era un Quiz o un Juego
-      if (widget.taskToEdit!.targetGameId.startsWith('quiz_')) {
+      // Detectamos si la tarea que estamos editando era un Quiz o un Juego
+      if (widget.taskToEdit!.targetGameId.startsWith('quiz_') ||
+          widget.taskToEdit!.targetGameId.length > 15) {
         _taskType = 'quiz';
         _selectedQuizId = widget.taskToEdit!.targetGameId;
       } else {
@@ -116,19 +114,20 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
         return;
       }
 
-      // 👇 Determinamos el ID final a guardar
+      // Determinamos el ID final a guardar (Firebase ID o Juego Local)
       final String finalTargetId = _taskType == 'game'
           ? _selectedGameId
           : _selectedQuizId!;
 
       try {
         if (widget.taskToEdit != null) {
+          // ACTUALIZAR
           final updatedTask = GameTask(
             id: widget.taskToEdit!.id,
             classId: widget.classId,
             title: _titleController.text,
             description: _descController.text,
-            targetGameId: finalTargetId, // Guardamos el juego o el quiz
+            targetGameId: finalTargetId,
             targetScore: _targetScore.toInt(),
             dueDate: _selectedDate,
             createdAt: widget.taskToEdit!.createdAt,
@@ -147,13 +146,14 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
             ),
           );
         } else {
+          // CREAR NUEVA TAREA
           await ref
               .read(taskProvider.notifier)
               .addTask(
                 classId: widget.classId,
                 title: _titleController.text,
                 description: _descController.text,
-                targetGameId: finalTargetId, // Guardamos el juego o el quiz
+                targetGameId: finalTargetId,
                 targetScore: _targetScore.toInt(),
                 dueDate: _selectedDate,
               );
@@ -199,6 +199,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       fontWeight: FontWeight.bold,
     );
     final isEditing = widget.taskToEdit != null;
+
+    // 👇 Escuchamos los Quizzes de Firebase en tiempo real
+    final quizzesAsync = ref.watch(availableQuizzesProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.paperLight,
@@ -248,7 +251,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
               ),
               const SizedBox(height: 20),
 
-              // 👇 NUEVO INTERRUPTOR DE TIPO DE TAREA
+              // 👇 INTERRUPTOR DE TIPO DE TAREA
               Text(
                 'Tipo de Actividad',
                 style: titleStyle.copyWith(fontSize: 16),
@@ -270,7 +273,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                           decoration: BoxDecoration(
                             color: _taskType == 'game'
                                 ? const Color(0xFF2ed573)
-                                : Colors.transparent, // Verde si está activo
+                                : Colors.transparent,
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: Center(
@@ -296,7 +299,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                           decoration: BoxDecoration(
                             color: _taskType == 'quiz'
                                 ? AppTheme.kivaPurple
-                                : Colors.transparent, // Morado si está activo
+                                : Colors.transparent,
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: Center(
@@ -369,52 +372,81 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                   ),
               ] else ...[
                 Text(
-                  'Elige un Quiz KIVA prehecho:',
+                  'Elige un Quiz:',
                   style: titleStyle.copyWith(fontSize: 16),
                 ),
                 const SizedBox(height: 8),
-                if (premadeQuizzesDatabase.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(15),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: const Text(
-                      '⚠️ No hay quizzes creados en la base de datos todavía.',
-                      style: TextStyle(color: Colors.orange),
-                    ),
-                  )
-                else
-                  DropdownButtonFormField<String>(
-                    value: _selectedQuizId,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(15),
-                        borderSide: BorderSide.none,
+
+                // Carga dinámica de Quizzes
+                quizzesAsync.when(
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (e, st) => Text(
+                    'Error al cargar quizzes',
+                    style: TextStyle(color: Colors.red.shade400),
+                  ),
+                  data: (quizzes) {
+                    if (quizzes.isEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.all(15),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: const Text(
+                          '⚠️ No hay quizzes creados todavía.',
+                          style: TextStyle(color: Colors.orange),
+                        ),
+                      );
+                    }
+
+                    // Aseguramos un valor inicial válido
+                    if (_selectedQuizId == null ||
+                        !quizzes.any((q) => q.id == _selectedQuizId)) {
+                      _selectedQuizId = quizzes.first.id;
+                    }
+
+                    return DropdownButtonFormField<String>(
+                      value: _selectedQuizId,
+                      isExpanded: true, // Evita overflow si el título es largo
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(15),
+                          borderSide: BorderSide.none,
+                        ),
                       ),
-                    ),
-                    items: premadeQuizzesDatabase
-                        .map(
-                          (q) => DropdownMenuItem(
-                            value: q.id,
-                            child: Text(
-                              q.title,
-                              style: GoogleFonts.nunito(
-                                fontWeight: FontWeight.bold,
+                      items: quizzes
+                          .map(
+                            (q) => DropdownMenuItem(
+                              value: q.id,
+                              child: Text(
+                                q.title,
+                                style: GoogleFonts.nunito(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) =>
-                        setState(() => _selectedQuizId = value),
-                  ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedQuizId = value;
+                          // 👇 MAGIA: Auto-ajustamos los puntos a la suma total del Quiz
+                          final q = quizzes.firstWhere(
+                            (element) => element.id == value,
+                          );
+                          _targetScore = q.totalPossibleScore.toDouble();
+                        });
+                      },
+                    );
+                  },
+                ),
 
                 const SizedBox(height: 15),
-                // Botón visual preparado para el futuro
+                // 👇 BOTÓN PARA CREAR NUEVO QUIZ
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 15),
@@ -426,21 +458,24 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                       width: 2,
                     ),
                   ),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'La creación de Quizzes Personalizados estará disponible muy pronto.',
-                        ),
+                  onPressed: () async {
+                    // Vamos a la pantalla de creación y esperamos que regrese un ID
+                    final newQuizId = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const CreateCustomQuizScreen(),
                       ),
                     );
+                    if (newQuizId != null && newQuizId is String) {
+                      setState(() => _selectedQuizId = newQuizId);
+                    }
                   },
                   icon: const Icon(
                     Icons.add_circle_outline,
                     color: AppTheme.kivaPurple,
                   ),
                   label: Text(
-                    'Crear Quiz Personalizado (Próximamente)',
+                    'Crear Quiz Personalizado',
                     style: GoogleFonts.nunito(
                       color: AppTheme.kivaPurple,
                       fontWeight: FontWeight.bold,
@@ -451,7 +486,6 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
 
               const SizedBox(height: 20),
 
-              // Resto del formulario...
               Text(
                 'Fecha y Hora Límite',
                 style: titleStyle.copyWith(fontSize: 16),
@@ -514,8 +548,8 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                 child: Slider(
                   value: _targetScore,
                   min: 5,
-                  max: 60,
-                  divisions: 11,
+                  max: 200, // 👈 Subido a 200 para soportar Quizzes grandes
+                  divisions: 39,
                   onChanged: (value) => setState(() => _targetScore = value),
                 ),
               ),
