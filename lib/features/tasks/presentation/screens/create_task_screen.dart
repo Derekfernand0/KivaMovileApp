@@ -97,8 +97,11 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
             targetGameId: _selectedGameId,
             targetScore: _targetScore.toInt(),
             dueDate: _selectedDate,
+            createdAt: widget
+                .taskToEdit!
+                .createdAt, // 👈 ¡ESTA ES LA LÍNEA QUE FALTABA!
           );
-          // 👇 Agregamos await
+
           await ref.read(taskProvider.notifier).updateTask(updatedTask);
 
           if (!mounted) return;
@@ -113,7 +116,6 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
           );
         } else {
           // CREAR NUEVA TAREA
-          // 👇 Agregamos await
           await ref
               .read(taskProvider.notifier)
               .addTask(
@@ -123,6 +125,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                 targetGameId: _selectedGameId,
                 targetScore: _targetScore.toInt(),
                 dueDate: _selectedDate,
+                // Nota: En addTask no ocupamos mandarle createdAt porque el provider lo crea automáticamente con DateTime.now()
               );
 
           if (!mounted) return;
@@ -140,7 +143,6 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
         if (!mounted) return;
         Navigator.pop(context);
       } catch (e) {
-        // 🚨 SI FIREBASE FALLA, TE LO MOSTRARÁ AQUÍ
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -223,7 +225,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: _selectedGameId,
+                initialValue: _selectedGameId,
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: Colors.white,

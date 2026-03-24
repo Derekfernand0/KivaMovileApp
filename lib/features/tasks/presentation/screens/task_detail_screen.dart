@@ -4,7 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../providers/task_provider.dart';
 import 'create_task_screen.dart';
+import '../../../games/presentation/screens/doors_game_screen.dart';
 import '../../../games/presentation/screens/minigames_hub_screen.dart';
+import '../../../games/presentation/screens/shawarma_game_screen.dart';
+import '../../../games/presentation/screens/water_game_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class TaskDetailScreen extends ConsumerWidget {
@@ -13,7 +16,7 @@ class TaskDetailScreen extends ConsumerWidget {
   final bool isOriginalGame;
   final bool isExpired;
   final bool isCompleted;
-  final dynamic currentClass; // 👈 1. Recibimos la clase real aquí
+  final dynamic currentClass;
 
   const TaskDetailScreen({
     super.key,
@@ -22,8 +25,63 @@ class TaskDetailScreen extends ConsumerWidget {
     required this.isOriginalGame,
     required this.isExpired,
     required this.isCompleted,
-    required this.currentClass, // 👈 2. Lo pedimos en el constructor
+    required this.currentClass,
   });
+
+  // 👇 FUNCIÓN ROBUSTA: Evita errores si Firebase guarda números como 'double' en vez de 'int'
+  int _getStudentScore(Map<String, dynamic> data, String gameId) {
+    int getSafeInt(String key) => (data[key] as num?)?.toInt() ?? 0;
+
+    switch (gameId) {
+      case 'rompe_silencio':
+        return getSafeInt('rompeSilencioScore');
+      case 'detecta_engano':
+        return getSafeInt('detectaEnganoScore');
+      case 'circulo_seguro':
+        return getSafeInt('circuloSeguroScore');
+      case 'cuerpo_reglas':
+        return getSafeInt('cuerpoReglasScore');
+      case 'semaforo_cuerpo':
+        return getSafeInt('semaforoCuerpoScore');
+      case 'semaforo_situaciones':
+        return getSafeInt('semaforoSituacionesScore');
+      case 'emocionometro':
+        return getSafeInt('emocionometroScore');
+      case 'puertas':
+        return getSafeInt('puertasScore');
+      case 'torre':
+        return getSafeInt('torreScore');
+      case 'shawarma':
+        return getSafeInt('shawarmaScore');
+      default:
+        return getSafeInt('${gameId}Score');
+    }
+  }
+
+  void _openAssignedGame(BuildContext context, String gameId) {
+    switch (gameId) {
+      case 'puertas':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const DoorsGameScreen()),
+        );
+        return;
+      case 'shawarma':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ShawarmaGameScreen()),
+        );
+        return;
+      case 'torre':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const WaterGameScreen()),
+        );
+        return;
+      default:
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const MiniGamesHubScreen()),
+        );
+        return;
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -91,56 +149,17 @@ class TaskDetailScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Estado Completado o Caducado (Para Alumnos)
             if (!isMaestro && isCompleted)
-              Container(
-                margin: const EdgeInsets.only(bottom: 20),
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade100,
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: const Color(0xFF2ed573)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.check_circle, color: Color(0xFF2ed573)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        '¡Felicidades! Ya completaste esta tarea.',
-                        style: GoogleFonts.nunito(
-                          color: Colors.green.shade800,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              _buildBanner(
+                Colors.green,
+                Icons.check_circle,
+                '¡Felicidades! Ya completaste esta tarea.',
               )
             else if (!isMaestro && isExpired)
-              Container(
-                margin: const EdgeInsets.only(bottom: 20),
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade100,
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: Colors.red),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.timer_off, color: Colors.red),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Esta tarea ha caducado y ya no puede ser jugada.',
-                        style: GoogleFonts.nunito(
-                          color: Colors.red,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              _buildBanner(
+                Colors.red,
+                Icons.timer_off,
+                'Esta tarea ha caducado y ya no puede ser jugada.',
               ),
 
             // Tarjeta Principal
@@ -167,60 +186,17 @@ class TaskDetailScreen extends ConsumerWidget {
                     spacing: 15,
                     runSpacing: 10,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppTheme.yellow,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.star, size: 18),
-                            const SizedBox(width: 5),
-                            Text(
-                              'Objetivo: ${task.targetScore} pts',
-                              style: GoogleFonts.fredoka(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        ),
+                      _buildChip(
+                        AppTheme.yellow,
+                        Icons.star,
+                        'Objetivo: ${task.targetScore} pts',
+                        AppTheme.inkLight,
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isExpired
-                              ? Colors.red.shade100
-                              : Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.access_time,
-                              size: 18,
-                              color: isExpired ? Colors.red : Colors.blue,
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              'Límite: $dueDateText',
-                              style: GoogleFonts.nunito(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: isExpired ? Colors.red : Colors.blue,
-                              ),
-                            ),
-                          ],
-                        ),
+                      _buildChip(
+                        isExpired ? Colors.red.shade100 : Colors.blue.shade50,
+                        Icons.access_time,
+                        'Límite: $dueDateText',
+                        isExpired ? Colors.red : Colors.blue,
                       ),
                     ],
                   ),
@@ -269,10 +245,9 @@ class TaskDetailScreen extends ConsumerWidget {
                 ],
               ),
             ),
-
             const SizedBox(height: 40),
 
-            // 👇 SECCIÓN EXCLUSIVA PARA EL MAESTRO (CONECTADO A FIREBASE)
+            // SECCIÓN DEL MAESTRO
             if (isMaestro) ...[
               Text(
                 '📊 Progreso de Alumnos',
@@ -281,12 +256,10 @@ class TaskDetailScreen extends ConsumerWidget {
               const SizedBox(height: 15),
 
               StreamBuilder<QuerySnapshot>(
-                // ⚠️ AJUSTA ESTA CONSULTA A TU BASE DE DATOS:
-                // Buscamos en la colección 'users' a los que sean 'alumno' y pertenezcan a esta clase
                 stream: FirebaseFirestore.instance
                     .collection('users')
                     .where('role', isEqualTo: 'alumno')
-                    // .where('classId', isEqualTo: currentClass.id) // Descomenta y ajusta si los alumnos tienen el ID de la clase guardado
+                    .where('classId', isEqualTo: task.classId)
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -296,55 +269,19 @@ class TaskDetailScreen extends ConsumerWidget {
                   final realStudents = snapshot.data?.docs ?? [];
 
                   if (realStudents.isEmpty) {
-                    return Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'No hay alumnos registrados en la base de datos.',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ),
+                    return _buildEmptyBox(
+                      'Aún no hay alumnos registrados en tu clase.',
                     );
                   }
 
-                  // 3. SEPARAMOS QUIÉNES TERMINARON Y QUIÉNES NO
                   List<QueryDocumentSnapshot> completedStudents = [];
                   List<QueryDocumentSnapshot> pendingStudents = [];
 
                   for (var student in realStudents) {
-                    final data = student.data() as Map<String, dynamic>;
-
-                    // 👇 Leemos el puntaje del alumno desde Firebase según el juego
-                    int studentScore = 0;
-                    switch (task.targetGameId) {
-                      case 'rompe_silencio':
-                        studentScore = data['rompeSilencioScore'] ?? 0;
-                        break;
-                      case 'detecta_engano':
-                        studentScore = data['detectaEnganoScore'] ?? 0;
-                        break;
-                      case 'circulo_seguro':
-                        studentScore = data['circuloSeguroScore'] ?? 0;
-                        break;
-                      case 'cuerpo_reglas':
-                        studentScore = data['cuerpoReglasScore'] ?? 0;
-                        break;
-                      case 'semaforo_cuerpo':
-                        studentScore = data['semaforoCuerpoScore'] ?? 0;
-                        break;
-                      case 'semaforo_situaciones':
-                        studentScore = data['semaforoSituacionesScore'] ?? 0;
-                        break;
-                      case 'emocionometro':
-                        studentScore = data['emocionometroScore'] ?? 0;
-                        break;
-                      // case 'puertas': studentScore = data['puertasScore'] ?? 0; break;
-                    }
+                    int studentScore = _getStudentScore(
+                      student.data() as Map<String, dynamic>,
+                      task.targetGameId,
+                    );
 
                     if (studentScore >= task.targetScore) {
                       completedStudents.add(student);
@@ -353,52 +290,46 @@ class TaskDetailScreen extends ConsumerWidget {
                     }
                   }
 
-                  // 4. EL MENSAJE SI NADIE HA TERMINADO
-                  if (completedStudents.isEmpty) {
+                  if (completedStudents.length == realStudents.length) {
                     return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 20),
-                          padding: const EdgeInsets.all(15),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade50,
-                            borderRadius: BorderRadius.circular(15),
-                            border: Border.all(color: Colors.orange.shade300),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.info_outline,
-                                color: Colors.orange,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'Nadie ha terminado esta tarea aún.',
-                                  style: GoogleFonts.nunito(
-                                    color: Colors.orange.shade800,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                        _buildBanner(
+                          Colors.green,
+                          Icons.workspace_premium,
+                          '¡Excelente! Todos los alumnos han completado esta tarea.',
                         ),
-                        // Mostramos la lista de alumnos reales pendientes
-                        _buildStudentsList(realStudents, completedStudents),
+                        _buildStudentsList(
+                          realStudents,
+                          completedStudents,
+                          task.targetScore,
+                        ),
+                      ],
+                    );
+                  } else if (completedStudents.isEmpty) {
+                    return Column(
+                      children: [
+                        _buildBanner(
+                          Colors.orange,
+                          Icons.info_outline,
+                          'Nadie ha terminado esta tarea aún.',
+                        ),
+                        _buildStudentsList(
+                          realStudents,
+                          completedStudents,
+                          task.targetScore,
+                        ),
                       ],
                     );
                   }
 
-                  // Si hay alumnos que terminaron
-                  return _buildStudentsList(realStudents, completedStudents);
+                  return _buildStudentsList(
+                    realStudents,
+                    completedStudents,
+                    task.targetScore,
+                  );
                 },
               ),
-            ]
-            // Botón de Acción para Alumnos
-            else if (!isExpired || isCompleted)
+            ] else if (!isExpired || isCompleted)
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isCompleted
@@ -415,11 +346,7 @@ class TaskDetailScreen extends ConsumerWidget {
                 ),
                 onPressed: () {
                   if (isOriginalGame) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Abriendo el juego original...'),
-                      ),
-                    );
+                    _openAssignedGame(context, task.targetGameId);
                   } else {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -443,11 +370,82 @@ class TaskDetailScreen extends ConsumerWidget {
     );
   }
 
-  // 👇 Widget extraído para mantener limpio el código de arriba
-  // 👇 Adaptado para leer documentos de Firestore
+  Widget _buildBanner(Color color, IconData icon, String text) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: color),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.nunito(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChip(
+    Color bgColor,
+    IconData icon,
+    String text,
+    Color textColor,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: textColor),
+          const SizedBox(width: 5),
+          Text(
+            text,
+            style: GoogleFonts.fredoka(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: textColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyBox(String message) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Center(
+        child: Text(message, style: const TextStyle(color: Colors.grey)),
+      ),
+    );
+  }
+
   Widget _buildStudentsList(
     List<QueryDocumentSnapshot> allStudents,
     List<QueryDocumentSnapshot> completedStudents,
+    int targetScore,
   ) {
     return Container(
       decoration: BoxDecoration(
@@ -459,18 +457,20 @@ class TaskDetailScreen extends ConsumerWidget {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: allStudents.length,
-        separatorBuilder: (context, index) => const Divider(height: 1),
+        separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (context, index) {
           final studentDoc = allStudents[index];
           final studentData = studentDoc.data() as Map<String, dynamic>;
 
           bool done = completedStudents.any((doc) => doc.id == studentDoc.id);
-
-          // ⚠️ AJUSTA 'name' o 'nombre' según cómo lo guardes en Firebase
           String studentName =
               studentData['name'] ??
               studentData['nombre'] ??
+              studentData['alias'] ??
               'Alumno Desconocido';
+
+          // Calculamos cuántos puntos tiene para mostrarlos en la UI
+          int currentScore = _getStudentScore(studentData, task.targetGameId);
 
           return ListTile(
             leading: CircleAvatar(
@@ -487,6 +487,13 @@ class TaskDetailScreen extends ConsumerWidget {
               style: GoogleFonts.nunito(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
+              ),
+            ),
+            subtitle: Text(
+              'Progreso: $currentScore / $targetScore pts',
+              style: GoogleFonts.nunito(
+                color: Colors.grey.shade600,
+                fontSize: 13,
               ),
             ),
             trailing: Container(

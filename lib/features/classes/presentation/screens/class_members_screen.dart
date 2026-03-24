@@ -8,7 +8,7 @@ import 'student_stats_screen.dart';
 class ClassMembersScreen extends StatefulWidget {
   final String classId;
   final String className;
-  final String hostId; // 👈 NECESITAMOS SABER QUIÉN CREÓ LA CLASE
+  final String hostId;
 
   const ClassMembersScreen({
     super.key,
@@ -22,12 +22,9 @@ class ClassMembersScreen extends StatefulWidget {
 }
 
 class _ClassMembersScreenState extends State<ClassMembersScreen> {
-  // Obtenemos el ID del usuario actual para saber si es el Host
   final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
-  // 👇 LÓGICA: ELIMINAR CLASE
   Future<void> _deleteClass() async {
-    // 1. Mostrar diálogo de confirmación de seguridad
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -81,14 +78,12 @@ class _ClassMembersScreenState extends State<ClassMembersScreen> {
       ),
     );
 
-    // 2. Si confirma, borramos de Firebase
     if (confirm == true) {
       try {
         await FirebaseFirestore.instance
             .collection('classes')
             .doc(widget.classId)
             .delete();
-        // Opcional: Podrías buscar y borrar las tareas asociadas a esta clase aquí.
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -96,7 +91,6 @@ class _ClassMembersScreenState extends State<ClassMembersScreen> {
               backgroundColor: Colors.red,
             ),
           );
-          // Regresa al Hub principal ya que la clase no existe
           Navigator.of(context).popUntil((route) => route.isFirst);
         }
       } catch (e) {
@@ -112,7 +106,6 @@ class _ClassMembersScreenState extends State<ClassMembersScreen> {
     }
   }
 
-  // 👇 LÓGICA: MENÚ DE ADMINISTRACIÓN AL MANTENER PRESIONADO
   void _showAdminOptions(
     String memberId,
     String memberName,
@@ -123,7 +116,8 @@ class _ClassMembersScreenState extends State<ClassMembersScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) {
+      builder: (bottomSheetContext) {
+        // Usamos un nombre diferente para el contexto
         bool isMaestro = currentRole == 'maestro' || currentRole == 'admin';
 
         return SafeArea(
@@ -141,7 +135,6 @@ class _ClassMembersScreenState extends State<ClassMembersScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Botón: Cambiar Rol
                 ListTile(
                   leading: Icon(
                     isMaestro ? Icons.arrow_downward : Icons.arrow_upward,
@@ -161,24 +154,34 @@ class _ClassMembersScreenState extends State<ClassMembersScreen> {
                     style: GoogleFonts.nunito(fontSize: 14),
                   ),
                   onTap: () async {
-                    Navigator.pop(context);
-                    String newRole = isMaestro ? 'alumno' : 'maestro';
-                    await FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(memberId)
-                        .update({'role': newRole});
-                    if (mounted)
-                      ScaffoldMessenger.of(context).showSnackBar(
+                    // 👇 1. GUARDAMOS EL MENSAJERO ANTES DE CERRAR
+                    final messenger = ScaffoldMessenger.of(context);
+                    Navigator.pop(bottomSheetContext); // Cerramos el menú
+
+                    try {
+                      String newRole = isMaestro ? 'alumno' : 'maestro';
+                      await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(memberId)
+                          .update({'role': newRole});
+                      messenger.showSnackBar(
                         SnackBar(
                           content: Text('Rol actualizado a $newRole'),
                           backgroundColor: AppTheme.green,
                         ),
                       );
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text('Error: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
                   },
                 ),
                 const Divider(),
 
-                // Botón: Expulsar
                 ListTile(
                   leading: const Icon(Icons.person_remove, color: Colors.red),
                   title: Text(
@@ -194,20 +197,39 @@ class _ClassMembersScreenState extends State<ClassMembersScreen> {
                     style: GoogleFonts.nunito(fontSize: 14),
                   ),
                   onTap: () async {
-                    Navigator.pop(context);
-                    // Asumiendo que guardas el classId en el perfil del usuario.
-                    // Ajusta esto si usas un array de 'classIds'.
-                    await FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(memberId)
-                        .update({'classId': ''});
-                    if (mounted)
-                      ScaffoldMessenger.of(context).showSnackBar(
+                    // 👇 1. GUARDAMOS EL MENSAJERO ANTES DE CERRAR
+                    final messenger = ScaffoldMessenger.of(context);
+                    Navigator.pop(bottomSheetContext);
+
+                    try {
+                      // 👇 2. Le quitamos el classId al usuario
+                      await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(memberId)
+                          .update({'classId': ''});
+
+                      // 👇 3. LO BORRAMOS DEL CONTADOR DE LA CLASE (Esto arregla el problema de los números)
+                      await FirebaseFirestore.instance
+                          .collection('classes')
+                          .doc(widget.classId)
+                          .update({
+                            'memberIds': FieldValue.arrayRemove([memberId]),
+                          });
+
+                      messenger.showSnackBar(
                         const SnackBar(
                           content: Text('Usuario expulsado de la clase.'),
                           backgroundColor: Colors.red,
                         ),
                       );
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text('Error al expulsar: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
                   },
                 ),
               ],
@@ -236,7 +258,6 @@ class _ClassMembersScreenState extends State<ClassMembersScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: AppTheme.inkLight),
         actions: [
-          // 👇 Botón de Eliminar Clase (Solo visible para el Host)
           if (isHost)
             IconButton(
               icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
@@ -246,8 +267,6 @@ class _ClassMembersScreenState extends State<ClassMembersScreen> {
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        // Buscamos a los usuarios que pertenezcan a esta clase
-        // Nota: Asegúrate de que el campo 'classId' exista en tus usuarios en Firebase
         stream: FirebaseFirestore.instance
             .collection('users')
             .where('classId', isEqualTo: widget.classId)
@@ -277,7 +296,10 @@ class _ClassMembersScreenState extends State<ClassMembersScreen> {
               final memberData = memberDoc.data() as Map<String, dynamic>;
 
               final String memberName =
-                  memberData['name'] ?? memberData['nombre'] ?? 'Sin nombre';
+                  memberData['name'] ??
+                  memberData['nombre'] ??
+                  memberData['alias'] ??
+                  'Sin nombre';
               final String memberRole = memberData['role'] ?? 'alumno';
               final bool isMemberAdmin =
                   memberRole == 'maestro' || memberRole == 'admin';
@@ -286,7 +308,6 @@ class _ClassMembersScreenState extends State<ClassMembersScreen> {
                 elevation: 2,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(15),
-                  // Resaltamos visualmente a los maestros con un borde
                   side: isMemberAdmin
                       ? BorderSide(
                           color: AppTheme.pink.withOpacity(0.5),
@@ -346,9 +367,7 @@ class _ClassMembersScreenState extends State<ClassMembersScreen> {
                     size: 30,
                   ),
 
-                  // Acción normal: Ver Estadísticas
                   onTap: () {
-                    // 👇 Asegúrate de importar StudentStatsScreen y que exista
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -361,7 +380,6 @@ class _ClassMembersScreenState extends State<ClassMembersScreen> {
                     );
                   },
 
-                  // 👇 Acción de Host: Mantener presionado para abrir administración
                   onLongPress: () {
                     if (isHost && currentUserId != memberDoc.id) {
                       _showAdminOptions(memberDoc.id, memberName, memberRole);

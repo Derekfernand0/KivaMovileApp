@@ -46,7 +46,7 @@ class StudentStatsScreen extends StatelessWidget {
     int globalMax = 0;
 
     // 1. CALCULAR MÉTRICAS GLOBALES REALES
-    _gamesConfig.keys.forEach((baseKey) {
+    for (var baseKey in _gamesConfig.keys) {
       // Leemos el historial real del juego (Ej: puertasHistory: [5, 10, 5])
       List<dynamic> history = studentData['${baseKey}History'] ?? [];
 
@@ -66,7 +66,7 @@ class StudentStatsScreen extends StatelessWidget {
           if (oldScore > globalMax) globalMax = oldScore;
         }
       }
-    });
+    }
 
     double globalAvg = globalGamesPlayed > 0
         ? globalTotalScore / globalGamesPlayed
@@ -318,7 +318,7 @@ class StudentStatsScreen extends StatelessWidget {
                   ],
                 ),
               );
-            }).toList(),
+            }),
           ],
         ),
       ),

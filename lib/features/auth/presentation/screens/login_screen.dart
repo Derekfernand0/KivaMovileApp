@@ -15,18 +15,14 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  // Controladores para Alumnos
   final _aliasController = TextEditingController();
   final _pinController = TextEditingController();
-
-  // Controladores para Maestros
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
   bool _isLogin = true;
-  bool _isTeacherMode =
-      false; // 🔥 Nuevo control para saber qué formulario mostrar
+  bool _isTeacherMode = false;
 
   @override
   void dispose() {
@@ -39,26 +35,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _submit() {
+    // Escondemos el teclado virtual
+    FocusScope.of(context).unfocus();
+
     if (_isTeacherMode) {
-      // VALIDACIÓN MAESTRO
       final name = _nameController.text.trim();
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
 
       if (email.isEmpty || password.length < 6) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Ingresa un correo y contraseña válida (mín. 6 caracteres).',
-            ),
-          ),
+        _showError(
+          'Ingresa un correo y contraseña válida (mín. 6 caracteres).',
         );
         return;
       }
       if (!_isLogin && name.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Por favor, ingresa tu nombre.')),
-        );
+        _showError('Por favor, ingresa tu nombre.');
         return;
       }
 
@@ -70,16 +62,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             .registerTeacher(name, email, password);
       }
     } else {
-      // VALIDACIÓN ALUMNO (Como lo teníamos antes)
       final alias = _aliasController.text.trim();
       final pin = _pinController.text.trim();
 
       if (alias.isEmpty || pin.length < 4) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Escribe tu Alias y un PIN de 4 números.'),
-          ),
-        );
+        _showError('Escribe tu Alias y un PIN de 4 números.');
         return;
       }
 
@@ -91,18 +78,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
 
+    // 🔥 PREVENCIÓN DE CRASHES: Atrapamos errores y los traducimos
     ref.listen<AsyncValue<AppUser?>>(authStateProvider, (previous, next) {
-      if (next is AsyncError) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.error.toString().replaceAll('Exception: ', '')),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
+      if (next.hasError && !next.isLoading) {
+        String errorMsg = next.error.toString().toLowerCase();
+        String displayMsg = 'Error al iniciar sesión. Revisa tus datos.';
+
+        if (errorMsg.contains('user-not-found') ||
+            errorMsg.contains('invalid-credential') ||
+            errorMsg.contains('wrong-password')) {
+          displayMsg = 'Correo, Alias o contraseña incorrectos.';
+        } else if (errorMsg.contains('email-already-in-use')) {
+          displayMsg = 'Ese correo ya está registrado.';
+        }
+        _showError(displayMsg);
       }
     });
 
@@ -158,6 +161,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     .fadeIn(delay: 500.ms, duration: 500.ms)
                     .slideY(begin: 0.2, end: 0),
                 const SizedBox(height: 50),
+
                 Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -228,6 +232,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     .animate()
                     .fadeIn(delay: 700.ms, duration: 500.ms)
                     .slideY(begin: 0.12, end: 0),
+
                 const SizedBox(height: 40),
                 ElevatedButton(
                       style: ElevatedButton.styleFrom(
@@ -267,6 +272,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       duration: 500.ms,
                       curve: Curves.easeOutBack,
                     ),
+
                 const SizedBox(height: 16),
                 Center(
                   child: TextButton(
@@ -291,6 +297,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                 ).animate().fadeIn(delay: 1200.ms, duration: 500.ms),
+
                 const SizedBox(height: 8),
                 Center(
                   child: TextButton.icon(
@@ -323,7 +330,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  // Pequeña función para no repetir código de diseño
   InputDecoration _inputDeco(String hint, IconData icon) {
     return InputDecoration(
       hintText: hint,

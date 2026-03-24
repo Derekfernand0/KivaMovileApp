@@ -182,8 +182,9 @@ class _TrafficLightGameScreenState
 
   // Lógica exacta de JS: +10 si es bien, 0 si oops, delay de 900ms
   void _checkAnswer(String userColor) {
-    if (!_isPlaying || _feedbackMessage.isNotEmpty)
+    if (!_isPlaying || _feedbackMessage.isNotEmpty) {
       return; // Evita toques múltiples
+    }
 
     bool isCorrect = (userColor == _currentSituation!.color);
 

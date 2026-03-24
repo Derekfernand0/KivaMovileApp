@@ -87,8 +87,9 @@ class ShawarmaGameScreen extends ConsumerWidget {
               right: 0,
               child: DragTarget<String>(
                 onAcceptWithDetails: (details) {
-                  if (details.data == 'shawarma_listo')
+                  if (details.data == 'shawarma_listo') {
                     notifier.serveCustomer();
+                  }
                 },
                 builder: (context, candidateData, rejectedData) {
                   return Center(

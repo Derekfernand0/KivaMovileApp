@@ -124,8 +124,9 @@ class DoorsGameNotifier extends StateNotifier<DoorsGameState> {
   }
 
   void selectDoor(int index) async {
-    if (state.isAnimating || state.isGameOver)
+    if (state.isAnimating || state.isGameOver) {
       return; // Bloquea toques múltiples
+    }
 
     final isCorrect = (index == state.currentQuestion.correctIndex);
 
@@ -196,8 +197,8 @@ class DoorsGameNotifier extends StateNotifier<DoorsGameState> {
           .read(scoreRepositoryProvider)
           .saveGameScore(
             userId: currentUser.uid,
-            gameId: 'game_01_puertas',
-            gameName: 'Las Puertas de la Prevencion',
+            gameId: 'puertas',
+            gameName: 'Las Puertas de la Prevención',
             score: state.score,
           );
       _scoreSaved = true;

@@ -4,7 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../games/presentation/screens/doors_game_screen.dart';
 import '../../../games/presentation/screens/minigames_hub_screen.dart';
+import '../../../games/presentation/screens/shawarma_game_screen.dart';
+import '../../../games/presentation/screens/water_game_screen.dart';
 import '../../../games/presentation/providers/minigames_provider.dart';
 import '../providers/class_provider.dart';
 import 'class_members_screen.dart';
@@ -50,6 +53,31 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
     }
   }
 
+  void _openAssignedGame(BuildContext context, String gameId) {
+    switch (gameId) {
+      case 'puertas':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const DoorsGameScreen()),
+        );
+        return;
+      case 'shawarma':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ShawarmaGameScreen()),
+        );
+        return;
+      case 'torre':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const WaterGameScreen()),
+        );
+        return;
+      default:
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const MiniGamesHubScreen()),
+        );
+        return;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final classId = widget.classId;
@@ -67,10 +95,15 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
       data: (classes) {
-        final currentClass = classes.firstWhere(
-          (c) => c.id == classId,
-          orElse: () => throw Exception('Clase no encontrada'),
-        );
+        final classExists = classes.any((c) => c.id == classId);
+        if (!classExists) {
+          return const Scaffold(
+            backgroundColor: Colors.transparent,
+            body: SizedBox.shrink(),
+          );
+        }
+
+        final currentClass = classes.firstWhere((c) => c.id == classId);
         final isMaestro =
             user.role == 'maestro' ||
             user.role == 'admin' ||
@@ -257,7 +290,8 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                                 miniGamesState,
                               );
                               bool isCompleted =
-                                  currentScore >= task.targetScore;
+                                  !isMaestro &&
+                                  (currentScore >= task.targetScore);
                               String dueDateText =
                                   '${task.dueDate.day}/${task.dueDate.month}/${task.dueDate.year}';
 
@@ -419,14 +453,9 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                                               ),
                                               onPressed: () {
                                                 if (isOriginalGame) {
-                                                  ScaffoldMessenger.of(
+                                                  _openAssignedGame(
                                                     context,
-                                                  ).showSnackBar(
-                                                    const SnackBar(
-                                                      content: Text(
-                                                        'Abriendo el juego original...',
-                                                      ),
-                                                    ),
+                                                    task.targetGameId,
                                                   );
                                                 } else {
                                                   Navigator.of(context).push(

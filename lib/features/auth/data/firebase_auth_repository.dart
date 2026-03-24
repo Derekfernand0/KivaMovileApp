@@ -44,8 +44,9 @@ class FirebaseAuthRepository implements AuthRepository {
           .collection('users')
           .doc(credential.user!.uid)
           .get();
-      if (!doc.exists)
+      if (!doc.exists) {
         throw Exception('Usuario no encontrado en la base de datos.');
+      }
 
       final user = AppUser.fromMap(doc.data()!, credential.user!.uid);
       await _saveLocalSession(user);

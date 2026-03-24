@@ -479,7 +479,7 @@ class ShawarmaNotifier extends StateNotifier<ShawarmaGameState> {
           .read(scoreRepositoryProvider)
           .saveGameScore(
             userId: user.uid,
-            gameId: 'game_03_shawarma',
+            gameId: 'shawarma',
             gameName: 'Shawarma Seguro',
             score: state.score,
           );

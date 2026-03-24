@@ -181,9 +181,11 @@ class WaterGameNotifier extends StateNotifier<WaterGameState> {
           .read(scoreRepositoryProvider)
           .saveGameScore(
             userId: user.uid,
-            gameId: 'game_02_water',
-            gameName: 'Responde o Ahógate',
-            score: state.playerBlocks, // Los bloques totales son la puntuación
+            gameId: 'torre',
+            gameName: 'La Gran Torre de Isla',
+            score:
+                state.playerBlocks *
+                5, // Puntos escalados por bloque para que sea mas justo
           );
     }
   }

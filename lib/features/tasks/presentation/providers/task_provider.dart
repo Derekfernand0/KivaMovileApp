@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// --- MODELO DE LA TAREA (Preparado para Firestore) ---
 class GameTask {
   final String id;
   final String classId;
@@ -11,6 +10,7 @@ class GameTask {
   final String targetGameId;
   final int targetScore;
   final DateTime dueDate;
+  final DateTime createdAt; // 🔥 Agregado para el ordenamiento
 
   GameTask({
     required this.id,
@@ -20,6 +20,7 @@ class GameTask {
     required this.targetGameId,
     required this.targetScore,
     required this.dueDate,
+    required this.createdAt,
   });
 
   Map<String, dynamic> toMap() {
@@ -29,7 +30,8 @@ class GameTask {
       'description': description,
       'targetGameId': targetGameId,
       'targetScore': targetScore,
-      'dueDate': dueDate.toIso8601String(), // Guardamos la fecha como texto
+      'dueDate': dueDate.toIso8601String(),
+      'createdAt': createdAt.toIso8601String(),
     };
   }
 
@@ -42,23 +44,24 @@ class GameTask {
       targetGameId: map['targetGameId'] ?? '',
       targetScore: map['targetScore']?.toInt() ?? 0,
       dueDate: DateTime.parse(map['dueDate']),
+      // Si es una tarea vieja sin este campo, asume la fecha actual para no fallar
+      createdAt: map['createdAt'] != null
+          ? DateTime.parse(map['createdAt'])
+          : DateTime.now(),
     );
   }
 }
 
-// --- CONTROLADOR CONECTADO A FIREBASE ---
 class TaskNotifier extends StateNotifier<List<GameTask>> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   StreamSubscription? _subscription;
 
   TaskNotifier() : super([]);
 
-  // 👇 Escucha las tareas de una clase específica en TIEMPO REAL
-  // 👇 Escucha las tareas de una clase específica en TIEMPO REAL
   void listenToTasks(String classId) {
-    _subscription?.cancel(); // Cancelamos suscripciones anteriores
+    _subscription?.cancel();
 
-    print("📡 Intentando escuchar tareas para la clase: $classId");
+    print("📡 Escuchando tareas para la clase: $classId");
 
     _subscription = _firestore
         .collection('tasks')
@@ -66,21 +69,21 @@ class TaskNotifier extends StateNotifier<List<GameTask>> {
         .snapshots()
         .listen(
           (snapshot) {
-            print(
-              "✅ ÉXITO: Se encontraron ${snapshot.docs.length} tareas en Firebase.",
-            );
-            state = snapshot.docs
+            final tasks = snapshot.docs
                 .map((doc) => GameTask.fromMap(doc.data(), doc.id))
                 .toList();
+
+            // 🔥 ORDENAMOS LAS TAREAS: La más reciente creada irá hasta arriba
+            tasks.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+            state = tasks;
           },
           onError: (error) {
-            // 🚨 AQUÍ ESTÁ LA MAGIA: Si Firebase nos bloquea, nos lo dirá aquí.
             print("🔥 ERROR FATAL AL ESCUCHAR TAREAS: $error");
           },
         );
   }
 
-  // 👇 Escribir en Firebase
   Future<void> addTask({
     required String classId,
     required String title,
@@ -97,11 +100,11 @@ class TaskNotifier extends StateNotifier<List<GameTask>> {
       targetGameId: targetGameId,
       targetScore: targetScore,
       dueDate: dueDate,
+      createdAt: DateTime.now(), // 🔥 Fecha exacta de creación
     );
     await _firestore.collection('tasks').add(newTask.toMap());
   }
 
-  // 👇 Actualizar en Firebase
   Future<void> updateTask(GameTask updatedTask) async {
     await _firestore
         .collection('tasks')
@@ -109,7 +112,6 @@ class TaskNotifier extends StateNotifier<List<GameTask>> {
         .update(updatedTask.toMap());
   }
 
-  // 👇 Borrar en Firebase
   Future<void> removeTask(String taskId) async {
     await _firestore.collection('tasks').doc(taskId).delete();
   }
