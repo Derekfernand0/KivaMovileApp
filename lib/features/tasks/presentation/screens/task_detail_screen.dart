@@ -4,11 +4,15 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../providers/task_provider.dart';
 import 'create_task_screen.dart';
-import '../../../games/presentation/screens/doors_game_screen.dart';
-import '../../../games/presentation/screens/minigames_hub_screen.dart';
-import '../../../games/presentation/screens/shawarma_game_screen.dart';
-import '../../../games/presentation/screens/water_game_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+// 👇 IMPORTAMOS LAS RUTAS A LOS JUEGOS Y QUIZZES
+import '../../../games/presentation/screens/doors_game_screen.dart';
+import '../../../games/presentation/screens/water_game_screen.dart';
+import '../../../games/presentation/screens/shawarma_game_screen.dart';
+import '../../../games/presentation/screens/minigames_hub_screen.dart';
+import '../../../quizzes/presentation/screens/quiz_game_screen.dart'; // 👈 El nuevo
+import '../../../quizzes/data/premade_quizzes/premade_quizzes_db.dart'; // 👈 Base de datos de quizzes
 
 class TaskDetailScreen extends ConsumerWidget {
   final GameTask task;
@@ -28,7 +32,6 @@ class TaskDetailScreen extends ConsumerWidget {
     required this.currentClass,
   });
 
-  // 👇 FUNCIÓN ROBUSTA: Evita errores si Firebase guarda números como 'double' en vez de 'int'
   int _getStudentScore(Map<String, dynamic> data, String gameId) {
     int getSafeInt(String key) => (data[key] as num?)?.toInt() ?? 0;
 
@@ -58,31 +61,6 @@ class TaskDetailScreen extends ConsumerWidget {
     }
   }
 
-  void _openAssignedGame(BuildContext context, String gameId) {
-    switch (gameId) {
-      case 'puertas':
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const DoorsGameScreen()),
-        );
-        return;
-      case 'shawarma':
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const ShawarmaGameScreen()),
-        );
-        return;
-      case 'torre':
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const WaterGameScreen()),
-        );
-        return;
-      default:
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const MiniGamesHubScreen()),
-        );
-        return;
-    }
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final titleStyle = GoogleFonts.fredoka(
@@ -92,19 +70,28 @@ class TaskDetailScreen extends ConsumerWidget {
     String dueDateText =
         '${task.dueDate.day}/${task.dueDate.month}/${task.dueDate.year} a las ${task.dueDate.hour}:${task.dueDate.minute.toString().padLeft(2, '0')}';
 
-    final Map<String, String> gameNames = {
-      'puertas': '🚪 Las Puertas de la Confianza',
-      'torre': '🏗️ La Gran Torre de Isla',
-      'shawarma': '🥙 El Shawarma Seguro',
-      'rompe_silencio': '🎤 Rompe el Silencio',
-      'emocionometro': '🧭 Emocionómetro',
-      'semaforo_situaciones': '🚦 Semáforo Situaciones',
-      'semaforo_cuerpo': '🚦 Semáforo del Cuerpo',
-      'detecta_engano': '📱 Detecta el Engaño',
-      'circulo_seguro': '🛡️ Mi Círculo Seguro',
-      'cuerpo_reglas': '🙅‍♀️ Mi cuerpo, mis reglas',
-    };
-    String gameName = gameNames[task.targetGameId] ?? 'Juego Desconocido';
+    // 👇 NOMBRES DINÁMICOS (Soporta minijuegos y Quizzes infinitos)
+    String gameName = 'Juego Desconocido';
+    if (task.targetGameId.startsWith('quiz_')) {
+      final quiz = premadeQuizzesDatabase
+          .where((q) => q.id == task.targetGameId)
+          .firstOrNull;
+      gameName = quiz != null ? '📝 ${quiz.title}' : '📝 Cuestionario KIVA';
+    } else {
+      final Map<String, String> gameNames = {
+        'puertas': '🚪 Las Puertas de la Confianza',
+        'torre': '🏗️ La Gran Torre de Isla',
+        'shawarma': '🥙 El Shawarma Seguro',
+        'rompe_silencio': '🎤 Rompe el Silencio',
+        'emocionometro': '🧭 Emocionómetro',
+        'semaforo_situaciones': '🚦 Semáforo Situaciones',
+        'semaforo_cuerpo': '🚦 Semáforo del Cuerpo',
+        'detecta_engano': '📱 Detecta el Engaño',
+        'circulo_seguro': '🛡️ Mi Círculo Seguro',
+        'cuerpo_reglas': '🙅‍♀️ Mi cuerpo, mis reglas',
+      };
+      gameName = gameNames[task.targetGameId] ?? 'Juego Desconocido';
+    }
 
     return Scaffold(
       backgroundColor: AppTheme.paperLight,
@@ -162,7 +149,6 @@ class TaskDetailScreen extends ConsumerWidget {
                 'Esta tarea ha caducado y ya no puede ser jugada.',
               ),
 
-            // Tarjeta Principal
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
@@ -219,7 +205,7 @@ class TaskDetailScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 30),
                   Text(
-                    'Juego Asignado:',
+                    'Actividad Asignada:',
                     style: titleStyle.copyWith(
                       fontSize: 18,
                       color: AppTheme.lilac,
@@ -247,7 +233,6 @@ class TaskDetailScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 40),
 
-            // SECCIÓN DEL MAESTRO
             if (isMaestro) ...[
               Text(
                 '📊 Progreso de Alumnos',
@@ -275,18 +260,13 @@ class TaskDetailScreen extends ConsumerWidget {
                   }
 
                   List<QueryDocumentSnapshot> completedStudents = [];
-                  List<QueryDocumentSnapshot> pendingStudents = [];
-
                   for (var student in realStudents) {
-                    int studentScore = _getStudentScore(
-                      student.data() as Map<String, dynamic>,
-                      task.targetGameId,
-                    );
-
-                    if (studentScore >= task.targetScore) {
+                    if (_getStudentScore(
+                          student.data() as Map<String, dynamic>,
+                          task.targetGameId,
+                        ) >=
+                        task.targetScore) {
                       completedStudents.add(student);
-                    } else {
-                      pendingStudents.add(student);
                     }
                   }
 
@@ -345,8 +325,32 @@ class TaskDetailScreen extends ConsumerWidget {
                   elevation: isCompleted ? 0 : 5,
                 ),
                 onPressed: () {
-                  if (isOriginalGame) {
-                    _openAssignedGame(context, task.targetGameId);
+                  // 👇 AHORA SÍ NAVEGAMOS AL JUEGO CORRESPONDIENTE O AL QUIZ
+                  if (task.targetGameId.startsWith('quiz_')) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            QuizGameScreen(quizId: task.targetGameId),
+                      ),
+                    );
+                  } else if (task.targetGameId == 'puertas') {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const DoorsGameScreen(),
+                      ),
+                    );
+                  } else if (task.targetGameId == 'torre') {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const WaterGameScreen(),
+                      ),
+                    );
+                  } else if (task.targetGameId == 'shawarma') {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ShawarmaGameScreen(),
+                      ),
+                    );
                   } else {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -360,7 +364,7 @@ class TaskDetailScreen extends ConsumerWidget {
                   size: 28,
                 ),
                 label: Text(
-                  isCompleted ? 'Reintentar Juego' : 'Ir a Jugar',
+                  isCompleted ? 'Reintentar Tarea' : 'Ir a la Actividad',
                   style: GoogleFonts.fredoka(fontSize: 22),
                 ),
               ),
@@ -468,8 +472,6 @@ class TaskDetailScreen extends ConsumerWidget {
               studentData['nombre'] ??
               studentData['alias'] ??
               'Alumno Desconocido';
-
-          // Calculamos cuántos puntos tiene para mostrarlos en la UI
           int currentScore = _getStudentScore(studentData, task.targetGameId);
 
           return ListTile(

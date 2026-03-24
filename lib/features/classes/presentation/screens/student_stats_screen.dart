@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/app_theme.dart';
+// 👇 Importamos la base de datos de Quizzes
+import '../../../quizzes/data/premade_quizzes/premade_quizzes_db.dart';
 
 class StudentStatsScreen extends StatelessWidget {
   final String studentId;
@@ -15,8 +17,7 @@ class StudentStatsScreen extends StatelessWidget {
     required this.studentData,
   });
 
-  // 👇 DICCIONARIO COMPLETO: LOS 10 JUEGOS
-  // Usamos el "ID base" que coincida con cómo lo guardas en Firebase
+  // 👇 DICCIONARIO COMPLETO: LOS 10 JUEGOS ORIGINALES
   final Map<String, Map<String, dynamic>> _gamesConfig = const {
     'puertas': {'name': '🚪 Las Puertas', 'color': Colors.redAccent},
     'torre': {'name': '🏗️ La Gran Torre', 'color': Colors.amber},
@@ -39,27 +40,34 @@ class StudentStatsScreen extends StatelessWidget {
     },
   };
 
+  // 👇 FUNCIÓN A PRUEBA DE BALAS PARA LEER NÚMEROS DE FIREBASE
+  int _getSafeInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is num)
+      return value.toInt(); // Convierte double a int automáticamente
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     int globalTotalScore = 0;
     int globalGamesPlayed = 0;
     int globalMax = 0;
 
-    // 1. CALCULAR MÉTRICAS GLOBALES REALES
+    // 1. CALCULAR MÉTRICAS GLOBALES REALES DE JUEGOS
     for (var baseKey in _gamesConfig.keys) {
-      // Leemos el historial real del juego (Ej: puertasHistory: [5, 10, 5])
       List<dynamic> history = studentData['${baseKey}History'] ?? [];
 
       if (history.isNotEmpty) {
         for (var score in history) {
-          int s = score as int;
+          int s = _getSafeInt(score); // 👈 Lectura segura
           globalTotalScore += s;
           globalGamesPlayed++;
           if (s > globalMax) globalMax = s;
         }
       } else {
-        // Compatibilidad con datos viejos por si no tienen historial aún
-        int oldScore = studentData['${baseKey}Score'] ?? 0;
+        int oldScore = _getSafeInt(studentData['${baseKey}Score']);
         if (oldScore > 0) {
           globalTotalScore += oldScore;
           globalGamesPlayed++;
@@ -115,8 +123,11 @@ class StudentStatsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 30),
 
+            // ====================================================
+            // SECCIÓN 1: MINIJUEGOS
+            // ====================================================
             Text(
-              '📊 Rendimiento por Juego',
+              '🎮 Rendimiento en Juegos',
               style: GoogleFonts.fredoka(
                 fontSize: 22,
                 color: AppTheme.inkLight,
@@ -124,206 +135,112 @@ class StudentStatsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 15),
 
-            // --- LISTA DE GRÁFICAS POR JUEGO ---
             ..._gamesConfig.entries.map((entry) {
               String baseKey = entry.key;
               String gameName = entry.value['name'];
               Color gameColor = entry.value['color'];
 
-              // 2. MATEMÁTICA REAL POR JUEGO
               List<dynamic> history = studentData['${baseKey}History'] ?? [];
-              int maxScore = studentData['${baseKey}Score'] ?? 0;
+              int maxScore = _getSafeInt(studentData['${baseKey}Score']);
               double avgScore = 0.0;
 
               if (history.isNotEmpty) {
-                int sum = history.fold(0, (prev, curr) => prev + (curr as int));
+                int sum = history.fold(
+                  0,
+                  (prev, curr) => prev + _getSafeInt(curr),
+                );
                 avgScore = sum / history.length;
-                // Nos aseguramos que el maxScore sea correcto basándonos en el historial
-                maxScore = history.cast<int>().reduce((a, b) => a > b ? a : b);
+                maxScore = history
+                    .map((e) => _getSafeInt(e))
+                    .reduce((a, b) => a > b ? a : b);
               } else if (maxScore > 0) {
-                // Si no hay historial pero sí hay un score viejo, el promedio es igual a ese score
                 avgScore = maxScore.toDouble();
               }
 
-              // Si el alumno no ha jugado este juego, mostramos una tarjeta atenuada
               if (maxScore == 0 && history.isEmpty) {
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 15),
-                  color: Colors.grey.shade100,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    side: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.videogame_asset_off,
-                      color: Colors.grey.shade400,
-                    ),
-                    title: Text(
-                      gameName,
-                      style: GoogleFonts.fredoka(
-                        fontSize: 16,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
-                    trailing: Text(
-                      'Sin datos',
-                      style: GoogleFonts.nunito(color: Colors.grey.shade500),
-                    ),
-                  ),
-                );
+                return _buildEmptyCard(gameName, Icons.videogame_asset_off);
               }
 
-              return Card(
-                margin: const EdgeInsets.only(bottom: 15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                elevation: 2,
-                child: ExpansionTile(
-                  leading: Icon(Icons.videogame_asset, color: gameColor),
-                  title: Text(
-                    gameName,
-                    style: GoogleFonts.fredoka(
-                      fontSize: 16,
-                      color: AppTheme.inkLight,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Intentos jugados: ${history.length}',
-                    style: GoogleFonts.nunito(fontSize: 12, color: Colors.grey),
-                  ),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              Column(
-                                children: [
-                                  Text(
-                                    'Promedio',
-                                    style: GoogleFonts.nunito(
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                  Text(
-                                    avgScore.toStringAsFixed(1),
-                                    style: GoogleFonts.fredoka(
-                                      fontSize: 22,
-                                      color: Colors.grey.shade800,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Column(
-                                children: [
-                                  Text(
-                                    'Puntuación Máxima',
-                                    style: GoogleFonts.nunito(
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                  Text(
-                                    maxScore.toString(),
-                                    style: GoogleFonts.fredoka(
-                                      fontSize: 22,
-                                      color: gameColor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 25),
-
-                          // 👇 GRÁFICA REAL DE BARRAS (fl_chart)
-                          SizedBox(
-                            height: 200,
-                            child: BarChart(
-                              BarChartData(
-                                alignment: BarChartAlignment.spaceAround,
-                                maxY: maxScore < 20
-                                    ? 20
-                                    : (maxScore + 10)
-                                          .toDouble(), // Escala dinámica
-                                titlesData: FlTitlesData(
-                                  show: true,
-                                  bottomTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      getTitlesWidget: (value, meta) {
-                                        return Padding(
-                                          padding: const EdgeInsets.only(
-                                            top: 8.0,
-                                          ),
-                                          child: Text(
-                                            value == 0 ? 'Promedio' : 'Máxima',
-                                            style: GoogleFonts.nunito(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  leftTitles: const AxisTitles(
-                                    sideTitles: SideTitles(showTitles: false),
-                                  ),
-                                  topTitles: const AxisTitles(
-                                    sideTitles: SideTitles(showTitles: false),
-                                  ),
-                                  rightTitles: const AxisTitles(
-                                    sideTitles: SideTitles(showTitles: false),
-                                  ),
-                                ),
-                                borderData: FlBorderData(show: false),
-                                gridData: const FlGridData(show: false),
-                                barGroups: [
-                                  // Barra de Promedio
-                                  BarChartGroupData(
-                                    x: 0,
-                                    barRods: [
-                                      BarChartRodData(
-                                        toY: avgScore,
-                                        color: Colors.grey.shade400,
-                                        width: 35,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                    ],
-                                  ),
-                                  // Barra de Puntuación Máxima
-                                  BarChartGroupData(
-                                    x: 1,
-                                    barRods: [
-                                      BarChartRodData(
-                                        toY: maxScore.toDouble(),
-                                        color: gameColor,
-                                        width: 35,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              return _buildChartCard(
+                gameName,
+                gameColor,
+                Icons.videogame_asset,
+                history.length,
+                avgScore,
+                maxScore,
+                maxScore + 10,
               );
             }),
+
+            const SizedBox(height: 30),
+
+            // ====================================================
+            // SECCIÓN 2: QUIZZES (NUEVA)
+            // ====================================================
+            Text(
+              '📝 Rendimiento en Quizzes',
+              style: GoogleFonts.fredoka(
+                fontSize: 22,
+                color: AppTheme.inkLight,
+              ),
+            ),
+            const SizedBox(height: 15),
+
+            if (premadeQuizzesDatabase.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: Text(
+                  'No hay quizzes en la base de datos.',
+                  style: GoogleFonts.nunito(color: Colors.grey),
+                ),
+              )
+            else
+              ...premadeQuizzesDatabase.map((quiz) {
+                String baseKey = quiz.id;
+                String quizName = quiz.title;
+                Color quizColor =
+                    AppTheme.kivaPurple; // Color morado para los quizzes
+                int totalPossible = quiz.totalPossibleScore;
+
+                List<dynamic> history = studentData['${baseKey}History'] ?? [];
+                int maxScore = _getSafeInt(studentData['${baseKey}Score']);
+                double avgScore = 0.0;
+
+                if (history.isNotEmpty) {
+                  int sum = history.fold(
+                    0,
+                    (prev, curr) => prev + _getSafeInt(curr),
+                  );
+                  avgScore = sum / history.length;
+                  maxScore = history
+                      .map((e) => _getSafeInt(e))
+                      .reduce((a, b) => a > b ? a : b);
+                } else if (maxScore > 0) {
+                  avgScore = maxScore.toDouble();
+                }
+
+                if (maxScore == 0 && history.isEmpty) {
+                  return _buildEmptyCard(quizName, Icons.quiz_outlined);
+                }
+
+                // En los quizzes, el techo de la gráfica siempre será el máximo posible de puntos (totalPossible)
+                return _buildChartCard(
+                  quizName,
+                  quizColor,
+                  Icons.quiz,
+                  history.length,
+                  avgScore,
+                  maxScore,
+                  totalPossible,
+                );
+              }),
           ],
         ),
       ),
     );
   }
+
+  // --- WIDGETS AUXILIARES PARA LIMPIEZA DE CÓDIGO ---
 
   Widget _buildGlobalCard(
     String title,
@@ -357,6 +274,170 @@ class StudentStatsScreen extends StatelessWidget {
               fontSize: 14,
               color: Colors.grey.shade700,
               fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyCard(String title, IconData icon) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 15),
+      color: Colors.grey.shade100,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: Colors.grey.shade400),
+        title: Text(
+          title,
+          style: GoogleFonts.fredoka(fontSize: 16, color: Colors.grey.shade500),
+        ),
+        trailing: Text(
+          'Sin datos',
+          style: GoogleFonts.nunito(color: Colors.grey.shade500),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChartCard(
+    String title,
+    Color color,
+    IconData icon,
+    int attempts,
+    double avgScore,
+    int maxScore,
+    int graphCeiling,
+  ) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 15),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      elevation: 2,
+      child: ExpansionTile(
+        leading: Icon(icon, color: color),
+        title: Text(
+          title,
+          style: GoogleFonts.fredoka(fontSize: 16, color: AppTheme.inkLight),
+        ),
+        subtitle: Text(
+          'Intentos: $attempts',
+          style: GoogleFonts.nunito(fontSize: 12, color: Colors.grey),
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Column(
+                      children: [
+                        Text(
+                          'Promedio',
+                          style: GoogleFonts.nunito(
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        Text(
+                          avgScore.toStringAsFixed(1),
+                          style: GoogleFonts.fredoka(
+                            fontSize: 22,
+                            color: Colors.grey.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        Text(
+                          'Calificación Máxima',
+                          style: GoogleFonts.nunito(
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        Text(
+                          maxScore.toString(),
+                          style: GoogleFonts.fredoka(
+                            fontSize: 22,
+                            color: color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 25),
+                SizedBox(
+                  height: 200,
+                  child: BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      // Ajuste dinámico del techo de la gráfica
+                      maxY: graphCeiling < 20 ? 20.0 : graphCeiling.toDouble(),
+                      titlesData: FlTitlesData(
+                        show: true,
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  value == 0 ? 'Promedio' : 'Máxima',
+                                  style: GoogleFonts.nunito(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        leftTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        topTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        rightTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      gridData: const FlGridData(show: false),
+                      barGroups: [
+                        BarChartGroupData(
+                          x: 0,
+                          barRods: [
+                            BarChartRodData(
+                              toY: avgScore,
+                              color: Colors.grey.shade400,
+                              width: 35,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ],
+                        ),
+                        BarChartGroupData(
+                          x: 1,
+                          barRods: [
+                            BarChartRodData(
+                              toY: maxScore.toDouble(),
+                              color: color,
+                              width: 35,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../providers/task_provider.dart';
+// 👇 Importamos la base de datos de Quizzes que creamos en el paso anterior
+import '../../../quizzes/data/premade_quizzes/premade_quizzes_db.dart';
 
 class CreateTaskScreen extends ConsumerStatefulWidget {
   final String classId;
-  final GameTask? taskToEdit; // 👇 Si recibe una tarea, entra en modo Edición
+  final GameTask? taskToEdit;
 
   const CreateTaskScreen({super.key, this.classId = '', this.taskToEdit});
 
@@ -19,7 +21,12 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
 
+  // 👇 Control del nuevo interruptor (Minijuego vs Quiz)
+  String _taskType = 'game'; // 'game' o 'quiz'
+
   String _selectedGameId = 'rompe_silencio';
+  String? _selectedQuizId; // Para guardar el ID del quiz seleccionado
+
   double _targetScore = 15;
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 7));
 
@@ -45,22 +52,34 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   @override
   void initState() {
     super.initState();
-    // 👇 Si estamos editando, llenamos los campos con los datos existentes
+
+    // Seleccionamos el primer quiz por defecto si la base de datos no está vacía
+    if (premadeQuizzesDatabase.isNotEmpty) {
+      _selectedQuizId = premadeQuizzesDatabase.first.id;
+    }
+
     if (widget.taskToEdit != null) {
       _titleController.text = widget.taskToEdit!.title;
       _descController.text = widget.taskToEdit!.description;
-      _selectedGameId = widget.taskToEdit!.targetGameId;
       _targetScore = widget.taskToEdit!.targetScore.toDouble();
       _selectedDate = widget.taskToEdit!.dueDate;
+
+      // 👇 Detectamos si la tarea que estamos editando era un Quiz o un Juego
+      if (widget.taskToEdit!.targetGameId.startsWith('quiz_')) {
+        _taskType = 'quiz';
+        _selectedQuizId = widget.taskToEdit!.targetGameId;
+      } else {
+        _taskType = 'game';
+        _selectedGameId = widget.taskToEdit!.targetGameId;
+      }
     }
   }
 
-  // 👇 Selector combinado de Fecha y Hora
   Future<void> _pickDateTime() async {
     final DateTime? pickedDate = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime.now(), // No se pueden poner fechas pasadas
+      firstDate: DateTime.now(),
       lastDate: DateTime(2030),
     );
 
@@ -86,20 +105,33 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
 
   Future<void> _submitTask() async {
     if (_formKey.currentState!.validate()) {
+      // Validamos que si eligió Quiz, realmente haya un quiz seleccionado
+      if (_taskType == 'quiz' && _selectedQuizId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Por favor selecciona un Quiz'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // 👇 Determinamos el ID final a guardar
+      final String finalTargetId = _taskType == 'game'
+          ? _selectedGameId
+          : _selectedQuizId!;
+
       try {
         if (widget.taskToEdit != null) {
-          // ACTUALIZAR TAREA EXISTENTE
           final updatedTask = GameTask(
             id: widget.taskToEdit!.id,
             classId: widget.classId,
             title: _titleController.text,
             description: _descController.text,
-            targetGameId: _selectedGameId,
+            targetGameId: finalTargetId, // Guardamos el juego o el quiz
             targetScore: _targetScore.toInt(),
             dueDate: _selectedDate,
-            createdAt: widget
-                .taskToEdit!
-                .createdAt, // 👈 ¡ESTA ES LA LÍNEA QUE FALTABA!
+            createdAt: widget.taskToEdit!.createdAt,
           );
 
           await ref.read(taskProvider.notifier).updateTask(updatedTask);
@@ -115,17 +147,15 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
             ),
           );
         } else {
-          // CREAR NUEVA TAREA
           await ref
               .read(taskProvider.notifier)
               .addTask(
                 classId: widget.classId,
                 title: _titleController.text,
                 description: _descController.text,
-                targetGameId: _selectedGameId,
+                targetGameId: finalTargetId, // Guardamos el juego o el quiz
                 targetScore: _targetScore.toInt(),
                 dueDate: _selectedDate,
-                // Nota: En addTask no ocupamos mandarle createdAt porque el provider lo crea automáticamente con DateTime.now()
               );
 
           if (!mounted) return;
@@ -158,7 +188,6 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
     }
   }
 
-  // Formateador de texto para la fecha
   String _formatDateTime(DateTime dt) {
     return '${dt.day}/${dt.month}/${dt.year} a las ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
   }
@@ -219,57 +248,210 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
               ),
               const SizedBox(height: 20),
 
+              // 👇 NUEVO INTERRUPTOR DE TIPO DE TAREA
               Text(
-                '¿Qué minijuego deben jugar?',
+                'Tipo de Actividad',
                 style: titleStyle.copyWith(fontSize: 16),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedGameId,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide.none,
-                  ),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: AppTheme.lineLight),
                 ),
-                items: _availableGames.entries
-                    .map(
-                      (entry) => DropdownMenuItem(
-                        value: entry.key,
-                        child: Text(
-                          entry.value,
-                          style: GoogleFonts.nunito(
-                            fontWeight: FontWeight.bold,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _taskType = 'game'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _taskType == 'game'
+                                ? const Color(0xFF2ed573)
+                                : Colors.transparent, // Verde si está activo
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '🎮 Minijuegos',
+                              style: GoogleFonts.nunito(
+                                color: _taskType == 'game'
+                                    ? Colors.white
+                                    : Colors.grey.shade600,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    )
-                    .toList(),
-                onChanged: (value) => setState(() {
-                  _selectedGameId = value!;
-                }),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _taskType = 'quiz'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _taskType == 'quiz'
+                                ? AppTheme.kivaPurple
+                                : Colors.transparent, // Morado si está activo
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '📝 Quizzes',
+                              style: GoogleFonts.nunito(
+                                color: _taskType == 'quiz'
+                                    ? Colors.white
+                                    : Colors.grey.shade600,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(height: 20),
 
-              if (_gameImages.containsKey(_selectedGameId))
-                Padding(
-                  padding: const EdgeInsets.only(top: 15.0),
-                  child: Center(
-                    child: ClipRRect(
+              // 👇 SECCIÓN DINÁMICA (Depende del interruptor)
+              if (_taskType == 'game') ...[
+                Text(
+                  'Elige un Minijuego:',
+                  style: titleStyle.copyWith(fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: _selectedGameId,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(15),
-                      child: Image.asset(
-                        _gameImages[_selectedGameId]!,
-                        height: 120,
-                        fit: BoxFit.contain,
-                        errorBuilder: (c, e, s) => const SizedBox(height: 0),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  items: _availableGames.entries
+                      .map(
+                        (e) => DropdownMenuItem(
+                          value: e.key,
+                          child: Text(
+                            e.value,
+                            style: GoogleFonts.nunito(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) =>
+                      setState(() => _selectedGameId = value!),
+                ),
+                if (_gameImages.containsKey(_selectedGameId))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 15.0),
+                    child: Center(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(15),
+                        child: Image.asset(
+                          _gameImages[_selectedGameId]!,
+                          height: 120,
+                          fit: BoxFit.contain,
+                          errorBuilder: (c, e, s) => const SizedBox(),
+                        ),
                       ),
                     ),
                   ),
+              ] else ...[
+                Text(
+                  'Elige un Quiz KIVA prehecho:',
+                  style: titleStyle.copyWith(fontSize: 16),
                 ),
+                const SizedBox(height: 8),
+                if (premadeQuizzesDatabase.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(15),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: const Text(
+                      '⚠️ No hay quizzes creados en la base de datos todavía.',
+                      style: TextStyle(color: Colors.orange),
+                    ),
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    value: _selectedQuizId,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(15),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    items: premadeQuizzesDatabase
+                        .map(
+                          (q) => DropdownMenuItem(
+                            value: q.id,
+                            child: Text(
+                              q.title,
+                              style: GoogleFonts.nunito(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _selectedQuizId = value),
+                  ),
+
+                const SizedBox(height: 15),
+                // Botón visual preparado para el futuro
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    side: const BorderSide(
+                      color: AppTheme.kivaPurple,
+                      width: 2,
+                    ),
+                  ),
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'La creación de Quizzes Personalizados estará disponible muy pronto.',
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.add_circle_outline,
+                    color: AppTheme.kivaPurple,
+                  ),
+                  label: Text(
+                    'Crear Quiz Personalizado (Próximamente)',
+                    style: GoogleFonts.nunito(
+                      color: AppTheme.kivaPurple,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 20),
 
-              // 👇 SECCIÓN DE FECHA Y HORA LÍMITE
+              // Resto del formulario...
               Text(
                 'Fecha y Hora Límite',
                 style: titleStyle.copyWith(fontSize: 16),
@@ -334,9 +516,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                   min: 5,
                   max: 60,
                   divisions: 11,
-                  onChanged: (value) => setState(() {
-                    _targetScore = value;
-                  }),
+                  onChanged: (value) => setState(() => _targetScore = value),
                 ),
               ),
               const SizedBox(height: 20),
